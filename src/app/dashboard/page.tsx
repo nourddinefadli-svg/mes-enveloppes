@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
-import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes } from '@/services/firestore';
+import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense } from '@/services/firestore';
 import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel } from '@/lib/constants';
 import { EnvelopeWithStats, Envelope, Expense } from '@/types/types';
 import { useRouter } from 'next/navigation';
@@ -23,6 +23,14 @@ export default function DashboardPage() {
     const [envelopes, setEnvelopes] = useState<EnvelopeWithStats[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCurrentMonth, setIsCurrentMonth] = useState(true);
+
+    // Quick Add Modal State
+    const [quickAddEnvelope, setQuickAddEnvelope] = useState<string | null>(null);
+    const [quickAmount, setQuickAmount] = useState('');
+    const [quickDate, setQuickDate] = useState(new Date().toISOString().split('T')[0]);
+    const [quickNote, setQuickNote] = useState('');
+    const [quickSaving, setQuickSaving] = useState(false);
+    const [toast, setToast] = useState('');
 
     const currentMonthId = getCurrentMonthId();
 
@@ -115,6 +123,41 @@ export default function DashboardPage() {
         router.push('/login');
     };
 
+    const showToast = (msg: string) => {
+        setToast(msg);
+        setTimeout(() => setToast(''), 3000);
+    };
+
+    const handleQuickAdd = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user || !quickAddEnvelope) return;
+
+        const amountNum = parseFloat(quickAmount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+            showToast('Montant invalide.');
+            return;
+        }
+
+        setQuickSaving(true);
+        try {
+            await addExpense(user.uid, selectedMonth, {
+                envelopeName: quickAddEnvelope,
+                amount: amountNum,
+                date: new Date(quickDate),
+                note: quickNote.trim() || undefined,
+            });
+            showToast('Dépense ajoutée !');
+            setQuickAddEnvelope(null);
+            setQuickAmount('');
+            setQuickNote('');
+            loadData();
+        } catch {
+            showToast('Erreur lors de l\'ajout.');
+        } finally {
+            setQuickSaving(false);
+        }
+    };
+
     return (
         <AppShell>
             <div className="page-header">
@@ -178,7 +221,11 @@ export default function DashboardPage() {
                             const info = getEnvelopeInfo(env.name);
                             const status = getStatus(env.percentage);
                             return (
-                                <div key={env.id} className={`glass-card envelope-card status-${status}`}>
+                                <div
+                                    key={env.id}
+                                    className={`glass-card envelope-card status-${status} clickable`}
+                                    onClick={() => isCurrentMonth && setQuickAddEnvelope(env.name)}
+                                >
                                     <div className="envelope-header">
                                         <div className="envelope-name">
                                             <span className="envelope-icon">{info.icon}</span>
@@ -212,6 +259,82 @@ export default function DashboardPage() {
                     </div>
                 </>
             )}
+
+            {/* Quick Add Modal */}
+            {quickAddEnvelope && (
+                <div className="modal-overlay" onClick={() => setQuickAddEnvelope(null)}>
+                    <div className="glass-card modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2 className="modal-title">
+                                {getEnvelopeInfo(quickAddEnvelope).icon} {getEnvelopeInfo(quickAddEnvelope).label}
+                            </h2>
+                            <button
+                                className="btn btn-secondary btn-icon"
+                                onClick={() => setQuickAddEnvelope(null)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <p style={{ opacity: 0.7, marginBottom: '1rem', fontSize: '0.9rem' }}>Ajouter une dépense rapide</p>
+                        <form className="auth-form" onSubmit={handleQuickAdd}>
+                            <div className="form-group">
+                                <label className="form-label">📅 Date</label>
+                                <input
+                                    className="form-input"
+                                    type="date"
+                                    value={quickDate}
+                                    onChange={(e) => setQuickDate(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">💵 Montant ({CURRENCY})</label>
+                                <input
+                                    className="form-input"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={quickAmount}
+                                    onChange={(e) => setQuickAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">📝 Note (optionnelle)</label>
+                                <input
+                                    className="form-input"
+                                    type="text"
+                                    value={quickNote}
+                                    onChange={(e) => setQuickNote(e.target.value)}
+                                    placeholder="Ex: Baguette..."
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setQuickAddEnvelope(null)}
+                                    style={{ flex: 1 }}
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={quickSaving}
+                                    style={{ flex: 2 }}
+                                >
+                                    {quickSaving ? '⏳' : '✓ Ajouter'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {toast && <div className="toast">{toast}</div>}
         </AppShell>
     );
 }
