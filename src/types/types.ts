@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { EnvelopeClassId } from '@/lib/constants';
 
 export interface Month {
     id: string; // YYYY-MM
@@ -25,4 +26,15 @@ export interface EnvelopeWithStats extends Envelope {
     remaining: number;
     percentage: number;
     carryOver: number;
+}
+
+export interface Subscription {
+    id: string;
+    name: string;
+    amount: number;
+    frequency: 'monthly' | 'yearly';
+    startDate: Timestamp;
+    category: EnvelopeClassId;
+    active: boolean;
+    note?: string;
 }
