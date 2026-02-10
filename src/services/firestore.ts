@@ -12,6 +12,7 @@ import {
     where,
     Timestamp,
     serverTimestamp,
+    limit,
 } from 'firebase/firestore';
 import { getDbInstance } from '@/lib/firebase';
 import { Month, Envelope, Expense } from '@/types/types';
@@ -151,25 +152,28 @@ export async function deleteExpense(
 export async function getCumulativeEnvelopes(
     uid: string,
     targetMonthId: string
-): Promise<Record<string, { initial: number; spent: number; carryOver: number }>> {
-    // 1. Récupérer tous les mois jusqu'au mois cible (triés par date)
+): Promise<Record<string, { initial: number; spent: number; carryOver: number; adjustment: number }>> {
     const monthsRef = collection(getDbInstance(), 'users', uid, 'months');
     const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'asc')));
     const monthIds = monthsSnap.docs
         .map((d) => d.id)
         .filter((id) => id <= targetMonthId);
 
-    const cumulative: Record<string, { initial: number; spent: number; carryOver: number }> = {};
-
-    // Initialiser pour chaque classe
+    const cumulative: Record<string, { initial: number; spent: number; carryOver: number; adjustment: number }> = {};
     for (const cls of ENVELOPE_CLASSES) {
-        cumulative[cls.id] = { initial: 0, spent: 0, carryOver: 0 };
+        cumulative[cls.id] = { initial: 0, spent: 0, carryOver: 0, adjustment: 0 };
     }
 
-    // 2. Parcourir chaque mois et calculer la chaîne de reports
+    // Reports pour l'itération
+    const currentCarryOver: Record<string, number> = {};
+    for (const cls of ENVELOPE_CLASSES) currentCarryOver[cls.id] = 0;
+
     for (const mId of monthIds) {
         const envs = await getEnvelopes(uid, mId);
         const exps = await getExpenses(uid, mId);
+
+        const monthStats: Record<string, { initial: number; spent: number; remaining: number }> = {};
+        let totalDeficit = 0;
 
         for (const cls of ENVELOPE_CLASSES) {
             const envelope = envs.find((e) => e.name === cls.id);
@@ -178,17 +182,54 @@ export async function getCumulativeEnvelopes(
                 .filter((e) => e.envelopeName === cls.id)
                 .reduce((sum, e) => sum + e.amount, 0);
 
+            const available = initial + currentCarryOver[cls.id];
+            const remaining = available - spent;
+
             if (mId === targetMonthId) {
-                // Pour le mois cible, on garde les valeurs actuelles
                 cumulative[cls.id].initial = initial;
                 cumulative[cls.id].spent = spent;
-            } else {
-                // Pour les mois précédents, on accumule dans le carryOver du mois suivant
-                const remaining = (initial + cumulative[cls.id].carryOver) - spent;
-                cumulative[cls.id].carryOver = remaining;
+                cumulative[cls.id].carryOver = currentCarryOver[cls.id];
             }
+
+            if (cls.id !== 'epargne' && remaining < 0) {
+                totalDeficit += Math.abs(remaining);
+                monthStats[cls.id] = { initial, spent, remaining: 0 };
+                if (mId === targetMonthId) {
+                    cumulative[cls.id].adjustment = Math.abs(remaining);
+                }
+            } else {
+                monthStats[cls.id] = { initial, spent, remaining };
+            }
+        }
+
+        // Appliquer le déficit à l'épargne
+        monthStats['epargne'].remaining -= totalDeficit;
+        if (mId === targetMonthId) {
+            cumulative['epargne'].adjustment = -totalDeficit;
+        }
+
+        // Préparer le carryOver pour le mois suivant
+        for (const cls of ENVELOPE_CLASSES) {
+            currentCarryOver[cls.id] = monthStats[cls.id].remaining;
         }
     }
 
     return cumulative;
+}
+/**
+ * Calcule le total cumulé des épargnes de tous les mois, après déduction des déficits.
+ */
+export async function getTotalSavings(uid: string): Promise<number> {
+    // On récupère le dernier mois pour obtenir le solde de l'enveloppe épargne
+    const monthsRef = collection(getDbInstance(), 'users', uid, 'months');
+    const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'desc'), limit(1)));
+
+    if (monthsSnap.empty) return 0;
+
+    const lastMonthId = monthsSnap.docs[0].id;
+    const cumulative = await getCumulativeEnvelopes(uid, lastMonthId);
+
+    const data = cumulative['epargne'];
+    // Le total d'épargne disponible est (Initial + CarryOver + Adjustment) - Spent
+    return (data.initial + data.carryOver + data.adjustment) - data.spent;
 }

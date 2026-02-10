@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
-import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense } from '@/services/firestore';
+import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense, getTotalSavings } from '@/services/firestore';
 import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel } from '@/lib/constants';
 import { EnvelopeWithStats, Envelope, Expense } from '@/types/types';
 import { useRouter } from 'next/navigation';
@@ -22,6 +22,7 @@ export default function DashboardPage() {
     const [availableMonths, setAvailableMonths] = useState<string[]>([]);
     const [envelopes, setEnvelopes] = useState<EnvelopeWithStats[]>([]);
     const [loading, setLoading] = useState(true);
+    const [totalSavings, setTotalSavings] = useState(0);
     const [isCurrentMonth, setIsCurrentMonth] = useState(true);
 
     // Quick Add Modal State
@@ -70,24 +71,30 @@ export default function DashboardPage() {
                 const initial = data?.initial || 0;
                 const spent = data?.spent || 0;
                 const carryOver = data?.carryOver || 0;
+                const adjustment = data?.adjustment || 0;
 
-                // Formule: Restant = (Budget Initial + Report) - Dépensé
-                const remaining = (initial + carryOver) - spent;
+                // On affiche le dépassement (négatif) pour les enveloppes normales
+                // Mais pour l'épargne, on affiche le montant après déduction
+                const isSavings = cls.id === 'epargne';
+                const remaining = isSavings
+                    ? (initial + carryOver + adjustment) - spent
+                    : (initial + carryOver) - spent;
 
-                // Pourcentage basé sur (Budget Initial + Report)
+                // Pourcentage basé sur le montant disponible initial (budget + report)
                 const totalAvailable = initial + carryOver;
                 const percentage = totalAvailable > 0
-                    ? Math.max(0, Math.round((remaining / totalAvailable) * 100))
+                    ? Math.round((remaining / totalAvailable) * 100)
                     : 0;
 
                 return {
-                    id: envelope?.id || cls.id, // Use actual envelope ID if available, otherwise class ID
+                    id: envelope?.id || cls.id,
                     name: cls.id,
                     initialAmount: initial,
                     spent,
                     carryOver,
                     remaining,
-                    percentage
+                    percentage,
+                    adjustment
                 };
             });
 
@@ -96,6 +103,10 @@ export default function DashboardPage() {
             // envelopeStats.sort((a, b) => classOrder.indexOf(a.name) - classOrder.indexOf(b.name));
 
             setEnvelopes(envelopeStats);
+            // Load total savings (all months)
+            const totalS = await getTotalSavings(user.uid);
+            setTotalSavings(totalS);
+
             setIsCurrentMonth(selectedMonth === currentMonthId);
         } catch (err) {
             console.error('Failed to load dashboard:', err);
@@ -113,6 +124,13 @@ export default function DashboardPage() {
     const totalAvailable = totalBudget + totalCarryOver;
     const totalSpent = envelopes.reduce((s, e) => s + e.spent, 0);
     const totalRemaining = envelopes.reduce((s, e) => s + e.remaining, 0);
+
+    // Countdown logic
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const diffTime = nextMonth.getTime() - today.getTime();
+    const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const nextMonthLabel = formatMonthLabel(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`);
 
     const getEnvelopeInfo = (name: string) => {
         return ENVELOPE_CLASSES.find((c) => c.id === name) || { label: name, icon: '📦' };
@@ -198,11 +216,19 @@ export default function DashboardPage() {
                     {/* Summary Cards */}
                     <div className="summary-grid">
                         <div className="glass-card summary-card">
-                            <div className="summary-label">Total Disponible</div>
-                            <div className="summary-value positive">{totalAvailable.toLocaleString('fr-FR')} {CURRENCY}</div>
+                            <div className="summary-label">Prochain Mois (restant)</div>
+                            <div className={`summary-value ${daysRemaining < 15 ? 'positive' : 'spending'}`}>
+                                {daysRemaining} Jours
+                            </div>
                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                Budget: {totalBudget.toLocaleString('fr-FR')}
-                                {totalCarryOver !== 0 && ` | Report: ${totalCarryOver > 0 ? '+' : ''}${totalCarryOver.toLocaleString('fr-FR')}`}
+                                Avant le 1er {nextMonthLabel}
+                            </div>
+                        </div>
+                        <div className="glass-card summary-card">
+                            <div className="summary-label">Total d'Épargne</div>
+                            <div className="summary-value positive">{totalSavings.toLocaleString('fr-FR')} {CURRENCY}</div>
+                            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                Cumul des anciens mois
                             </div>
                         </div>
                         <div className="glass-card summary-card">

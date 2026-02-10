@@ -26,6 +26,7 @@ export interface EnvelopeWithStats extends Envelope {
     remaining: number;
     percentage: number;
     carryOver: number;
+    adjustment: number;
 }
 
 export interface Subscription {
