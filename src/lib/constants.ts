@@ -8,6 +8,7 @@ export const ENVELOPE_CLASSES = [
     { id: 'epargne', label: 'Épargne', icon: '💰' },
     { id: 'imprevus', label: 'Imprévus', icon: '⚡' },
     { id: 'bebe', label: 'Bébé', icon: '👶' },
+    { id: 'abonnements', label: 'Abonnements', icon: '💳' },
 ] as const;
 
 export type EnvelopeClassId = typeof ENVELOPE_CLASSES[number]['id'];

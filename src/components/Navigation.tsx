@@ -7,6 +7,7 @@ const navItems = [
     { href: '/dashboard', icon: '📊', label: 'Dashboard' },
     { href: '/add-expense', icon: '➕', label: 'Dépense' },
     { href: '/history', icon: '📋', label: 'Historique' },
+    { href: '/subscriptions', icon: '💳', label: 'Abonnements' },
     { href: '/init-month', icon: '📅', label: 'Mois' },
 ];
 
