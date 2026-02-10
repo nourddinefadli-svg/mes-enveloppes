@@ -23,7 +23,7 @@ export default function SubscriptionsPage() {
     // Form state
     const [name, setName] = useState('');
     const [amount, setAmount] = useState('');
-    const [category, setCategory] = useState(ENVELOPE_CLASSES[0].id);
+    const [category, setCategory] = useState<string>(ENVELOPE_CLASSES[0].id);
     const [frequency, setFrequency] = useState<'monthly' | 'yearly'>('monthly');
 
     const loadData = useCallback(async () => {
