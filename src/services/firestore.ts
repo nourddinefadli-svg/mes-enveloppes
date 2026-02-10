@@ -143,3 +143,52 @@ export async function deleteExpense(
     const expenseRef = doc(getDbInstance(), 'users', uid, 'months', monthId, 'expenses', expenseId);
     await deleteDoc(expenseRef);
 }
+// ===================== CUMULATIVE STATS =====================
+
+/**
+ * Calcule les stats cumulées pour un mois donné en prenant en compte les reports des mois précédents.
+ */
+export async function getCumulativeEnvelopes(
+    uid: string,
+    targetMonthId: string
+): Promise<Record<string, { initial: number; spent: number; carryOver: number }>> {
+    // 1. Récupérer tous les mois jusqu'au mois cible (triés par date)
+    const monthsRef = collection(getDbInstance(), 'users', uid, 'months');
+    const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'asc')));
+    const monthIds = monthsSnap.docs
+        .map((d) => d.id)
+        .filter((id) => id <= targetMonthId);
+
+    const cumulative: Record<string, { initial: number; spent: number; carryOver: number }> = {};
+
+    // Initialiser pour chaque classe
+    for (const cls of ENVELOPE_CLASSES) {
+        cumulative[cls.id] = { initial: 0, spent: 0, carryOver: 0 };
+    }
+
+    // 2. Parcourir chaque mois et calculer la chaîne de reports
+    for (const mId of monthIds) {
+        const envs = await getEnvelopes(uid, mId);
+        const exps = await getExpenses(uid, mId);
+
+        for (const cls of ENVELOPE_CLASSES) {
+            const envelope = envs.find((e) => e.name === cls.id);
+            const initial = envelope?.initialAmount || 0;
+            const spent = exps
+                .filter((e) => e.envelopeName === cls.id)
+                .reduce((sum, e) => sum + e.amount, 0);
+
+            if (mId === targetMonthId) {
+                // Pour le mois cible, on garde les valeurs actuelles
+                cumulative[cls.id].initial = initial;
+                cumulative[cls.id].spent = spent;
+            } else {
+                // Pour les mois précédents, on accumule dans le carryOver du mois suivant
+                const remaining = (initial + cumulative[cls.id].carryOver) - spent;
+                cumulative[cls.id].carryOver = remaining;
+            }
+        }
+    }
+
+    return cumulative;
+}

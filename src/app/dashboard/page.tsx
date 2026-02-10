@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
-import { getMonths, getEnvelopes, getExpenses } from '@/services/firestore';
+import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes } from '@/services/firestore';
 import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel } from '@/lib/constants';
 import { EnvelopeWithStats, Envelope, Expense } from '@/types/types';
 import { useRouter } from 'next/navigation';
@@ -39,10 +39,12 @@ export default function DashboardPage() {
             monthIds.sort().reverse();
             setAvailableMonths(monthIds);
 
-            // Load envelopes for selected month
+            // Load cumulative stats for selected month
+            const cumulativeData = await getCumulativeEnvelopes(user.uid, selectedMonth);
+
+            // Si aucune enveloppe n'existe pour ce mois, on vérifie si on doit rediriger
             const envs = await getEnvelopes(user.uid, selectedMonth);
             if (envs.length === 0) {
-                // No envelopes for this month, redirect to init
                 if (selectedMonth === currentMonthId) {
                     router.push('/init-month');
                     return;
@@ -52,23 +54,38 @@ export default function DashboardPage() {
                 return;
             }
 
-            // Load expenses for selected month
-            const expenses = await getExpenses(user.uid, selectedMonth);
+            // Calculate stats based on cumulative data
+            const envelopeStats: EnvelopeWithStats[] = ENVELOPE_CLASSES.map((cls) => {
+                const data = cumulativeData[cls.id];
+                const envelope = envs.find(e => e.name === cls.id);
 
-            // Calculate stats
-            const envelopeStats: EnvelopeWithStats[] = envs.map((env: Envelope) => {
-                const envExpenses = expenses.filter((exp: Expense) => exp.envelopeName === env.name);
-                const spent = envExpenses.reduce((sum: number, exp: Expense) => sum + exp.amount, 0);
-                const remaining = env.initialAmount - spent;
-                const percentage = env.initialAmount > 0
-                    ? Math.max(0, Math.round((remaining / env.initialAmount) * 100))
+                const initial = data?.initial || 0;
+                const spent = data?.spent || 0;
+                const carryOver = data?.carryOver || 0;
+
+                // Formule: Restant = (Budget Initial + Report) - Dépensé
+                const remaining = (initial + carryOver) - spent;
+
+                // Pourcentage basé sur (Budget Initial + Report)
+                const totalAvailable = initial + carryOver;
+                const percentage = totalAvailable > 0
+                    ? Math.max(0, Math.round((remaining / totalAvailable) * 100))
                     : 0;
-                return { ...env, spent, remaining, percentage };
+
+                return {
+                    id: envelope?.id || cls.id, // Use actual envelope ID if available, otherwise class ID
+                    name: cls.id,
+                    initialAmount: initial,
+                    spent,
+                    carryOver,
+                    remaining,
+                    percentage
+                };
             });
 
-            // Sort by ENVELOPE_CLASSES order
-            const classOrder: string[] = ENVELOPE_CLASSES.map((c) => c.id);
-            envelopeStats.sort((a, b) => classOrder.indexOf(a.name) - classOrder.indexOf(b.name));
+            // Sort by ENVELOPE_CLASSES order (already done by mapping ENVELOPE_CLASSES)
+            // const classOrder: string[] = ENVELOPE_CLASSES.map((c) => c.id);
+            // envelopeStats.sort((a, b) => classOrder.indexOf(a.name) - classOrder.indexOf(b.name));
 
             setEnvelopes(envelopeStats);
             setIsCurrentMonth(selectedMonth === currentMonthId);
@@ -83,7 +100,9 @@ export default function DashboardPage() {
         loadData();
     }, [loadData]);
 
-    const totalInitial = envelopes.reduce((s, e) => s + e.initialAmount, 0);
+    const totalBudget = envelopes.reduce((s, e) => s + e.initialAmount, 0);
+    const totalCarryOver = envelopes.reduce((s, e) => s + e.carryOver, 0);
+    const totalAvailable = totalBudget + totalCarryOver;
     const totalSpent = envelopes.reduce((s, e) => s + e.spent, 0);
     const totalRemaining = envelopes.reduce((s, e) => s + e.remaining, 0);
 
@@ -136,8 +155,12 @@ export default function DashboardPage() {
                     {/* Summary Cards */}
                     <div className="summary-grid">
                         <div className="glass-card summary-card">
-                            <div className="summary-label">Total Initial</div>
-                            <div className="summary-value positive">{totalInitial.toLocaleString('fr-FR')} {CURRENCY}</div>
+                            <div className="summary-label">Total Disponible</div>
+                            <div className="summary-value positive">{totalAvailable.toLocaleString('fr-FR')} {CURRENCY}</div>
+                            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                Budget: {totalBudget.toLocaleString('fr-FR')}
+                                {totalCarryOver !== 0 && ` | Report: ${totalCarryOver > 0 ? '+' : ''}${totalCarryOver.toLocaleString('fr-FR')}`}
+                            </div>
                         </div>
                         <div className="glass-card summary-card">
                             <div className="summary-label">Total Dépensé</div>
@@ -168,8 +191,13 @@ export default function DashboardPage() {
                                     <div className={`envelope-remaining ${env.remaining < 0 ? 'negative' : ''}`}>
                                         {env.remaining.toLocaleString('fr-FR')} {CURRENCY}
                                     </div>
-                                    <div className="envelope-amounts">
+                                    <div className="envelope-details">
                                         <span>Initial: {env.initialAmount.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                        {env.carryOver !== 0 && (
+                                            <span style={{ color: env.carryOver > 0 ? '#4ade80' : '#f87171', marginLeft: '0.5rem' }}>
+                                                {env.carryOver > 0 ? '+' : ''}{env.carryOver.toLocaleString('fr-FR')} (Report)
+                                            </span>
+                                        )}
                                         <span>Dépensé: {env.spent.toLocaleString('fr-FR')} {CURRENCY}</span>
                                     </div>
                                     <div className="progress-bar">
