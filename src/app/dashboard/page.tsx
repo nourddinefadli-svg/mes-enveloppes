@@ -83,7 +83,7 @@ export default function DashboardPage() {
                 // Pourcentage basé sur le montant disponible initial (budget + report)
                 const totalAvailable = initial + carryOver;
                 const percentage = totalAvailable > 0
-                    ? Math.round((remaining / totalAvailable) * 100)
+                    ? Math.floor((remaining / totalAvailable) * 100)
                     : 0;
 
                 return {
@@ -258,20 +258,21 @@ export default function DashboardPage() {
                                             {info.label}
                                         </div>
                                         <span className={`envelope-percentage ${status}`}>
-                                            {env.percentage}%
+                                            {env.percentage}% <span style={{ fontSize: '0.7rem', fontWeight: 500, opacity: 0.7 }}>restant</span>
                                         </span>
                                     </div>
                                     <div className={`envelope-remaining ${env.remaining < 0 ? 'negative' : ''}`}>
                                         {env.remaining.toLocaleString('fr-FR')} {CURRENCY}
                                     </div>
                                     <div className="envelope-details">
-                                        <span>Initial: {env.initialAmount.toLocaleString('fr-FR')} {CURRENCY}</span>
                                         {env.carryOver !== 0 && (
-                                            <span style={{ color: env.carryOver > 0 ? '#4ade80' : '#f87171', marginLeft: '0.5rem' }}>
+                                            <span style={{ color: env.carryOver > 0 ? '#4ade80' : '#f87171', marginRight: '0.5rem' }}>
                                                 {env.carryOver > 0 ? '+' : ''}{env.carryOver.toLocaleString('fr-FR')} (Report)
                                             </span>
                                         )}
-                                        <span>Dépensé: {env.spent.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                        {env.spent > 0 && (
+                                            <span style={{ color: 'var(--danger)' }}>Dépensé: {env.spent.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                        )}
                                     </div>
                                     <div className="progress-bar">
                                         <div
