@@ -15,7 +15,7 @@ import {
     limit,
 } from 'firebase/firestore';
 import { getDbInstance } from '@/lib/firebase';
-import { Month, Envelope, Expense } from '@/types/types';
+import { Month, Envelope, Expense, Project } from '@/types/types';
 import { ENVELOPE_CLASSES, EnvelopeClassId } from '@/lib/constants';
 
 // ===================== MONTHS =====================
@@ -231,21 +231,93 @@ export async function getTotalSavings(uid: string): Promise<{ real: number; pote
     const now = new Date();
     const currentMonthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+    let currentCarryOver: Record<string, number> = {};
+    for (const cls of ENVELOPE_CLASSES) currentCarryOver[cls.id] = 0;
+
     let realSavings = 0;
     let potentialSavings = 0;
 
     for (const mId of monthIds) {
-        const cumulative = await getCumulativeEnvelopes(uid, mId);
-        const data = cumulative['epargne'];
-        const total = (data.initial + data.carryOver + data.adjustment) - data.spent;
+        const envs = await getEnvelopes(uid, mId);
+        const exps = await getExpenses(uid, mId);
 
-        if (mId < currentMonthId) {
-            realSavings = total;
+        const monthStats: Record<string, { initial: number; spent: number; remaining: number }> = {};
+        let totalDeficit = 0;
+
+        for (const cls of ENVELOPE_CLASSES) {
+            const envelope = envs.find((e) => e.name === cls.id);
+            const initial = envelope?.initialAmount || 0;
+            const spent = exps
+                .filter((e) => e.envelopeName === cls.id)
+                .reduce((sum, e) => sum + e.amount, 0);
+
+            const available = initial + currentCarryOver[cls.id];
+            const remaining = available - spent;
+
+            if (cls.id !== 'epargne' && remaining < 0) {
+                totalDeficit += Math.abs(remaining);
+                monthStats[cls.id] = { initial, spent, remaining: 0 };
+            } else {
+                monthStats[cls.id] = { initial, spent, remaining };
+            }
         }
 
-        // potentialSavings sera toujours le total du mois le plus récent traité dans la boucle
-        potentialSavings = total;
+        // Apply deficit rebalancing to savings
+        monthStats['epargne'].remaining -= totalDeficit;
+        const totalSavingsForMonth = monthStats['epargne'].remaining;
+
+        if (mId < currentMonthId) {
+            realSavings = totalSavingsForMonth;
+        }
+        potentialSavings = totalSavingsForMonth;
+
+        // Update carry overs for next iteration
+        for (const cls of ENVELOPE_CLASSES) {
+            currentCarryOver[cls.id] = monthStats[cls.id].remaining;
+        }
     }
 
     return { real: realSavings, potential: potentialSavings };
+}
+
+// ===================== PROJECTS =====================
+
+export async function addProject(
+    uid: string,
+    project: Omit<Project, 'id'>
+): Promise<string> {
+    const projectsRef = collection(getDbInstance(), 'users', uid, 'projects');
+    const docRef = await addDoc(projectsRef, {
+        ...project,
+        date: Timestamp.fromDate(new Date(project.date as any)),
+    });
+    return docRef.id;
+}
+
+export async function getProjects(uid: string): Promise<Project[]> {
+    const projectsRef = collection(getDbInstance(), 'users', uid, 'projects');
+    const q = query(projectsRef, orderBy('date', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+    } as Project));
+}
+
+export async function updateProject(
+    uid: string,
+    projectId: string,
+    data: Partial<Project>
+): Promise<void> {
+    const projectRef = doc(getDbInstance(), 'users', uid, 'projects', projectId);
+    const updateData: any = { ...data };
+    if (data.date) {
+        updateData.date = Timestamp.fromDate(new Date(data.date as any));
+    }
+    await updateDoc(projectRef, updateData);
+}
+
+export async function deleteProject(uid: string, projectId: string): Promise<void> {
+    const projectRef = doc(getDbInstance(), 'users', uid, 'projects', projectId);
+    await deleteDoc(projectRef);
 }

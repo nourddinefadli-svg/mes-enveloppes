@@ -39,3 +39,13 @@ export interface Subscription {
     active: boolean;
     note?: string;
 }
+
+export interface Project {
+    id: string;
+    title: string;
+    amount: number;
+    date: Timestamp;
+    priority: 'high' | 'medium' | 'low';
+    status: 'pending' | 'completed' | 'cancelled';
+    note?: string;
+}
