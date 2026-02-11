@@ -217,19 +217,35 @@ export async function getCumulativeEnvelopes(
     return cumulative;
 }
 /**
- * Calcule le total cumulé des épargnes de tous les mois, après déduction des déficits.
+ * Calcule le total cumulé des épargnes :
+ * - 'real' : Épargne des mois écoulés (exclusivement).
+ * - 'potential' : Épargne totale incluant le mois en cours.
  */
-export async function getTotalSavings(uid: string): Promise<number> {
-    // On récupère le dernier mois pour obtenir le solde de l'enveloppe épargne
+export async function getTotalSavings(uid: string): Promise<{ real: number; potential: number }> {
     const monthsRef = collection(getDbInstance(), 'users', uid, 'months');
-    const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'desc'), limit(1)));
+    const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'asc')));
 
-    if (monthsSnap.empty) return 0;
+    if (monthsSnap.empty) return { real: 0, potential: 0 };
 
-    const lastMonthId = monthsSnap.docs[0].id;
-    const cumulative = await getCumulativeEnvelopes(uid, lastMonthId);
+    const monthIds = monthsSnap.docs.map((d) => d.id);
+    const now = new Date();
+    const currentMonthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const data = cumulative['epargne'];
-    // Le total d'épargne disponible est (Initial + CarryOver + Adjustment) - Spent
-    return (data.initial + data.carryOver + data.adjustment) - data.spent;
+    let realSavings = 0;
+    let potentialSavings = 0;
+
+    for (const mId of monthIds) {
+        const cumulative = await getCumulativeEnvelopes(uid, mId);
+        const data = cumulative['epargne'];
+        const total = (data.initial + data.carryOver + data.adjustment) - data.spent;
+
+        if (mId < currentMonthId) {
+            realSavings = total;
+        }
+
+        // potentialSavings sera toujours le total du mois le plus récent traité dans la boucle
+        potentialSavings = total;
+    }
+
+    return { real: realSavings, potential: potentialSavings };
 }

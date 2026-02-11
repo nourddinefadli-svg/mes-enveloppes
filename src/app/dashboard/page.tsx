@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
 import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense, getTotalSavings } from '@/services/firestore';
-import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel } from '@/lib/constants';
+import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel, SPIRITUAL_QUOTES } from '@/lib/constants';
 import { EnvelopeWithStats, Envelope, Expense } from '@/types/types';
 import { useRouter } from 'next/navigation';
 
@@ -22,7 +22,8 @@ export default function DashboardPage() {
     const [availableMonths, setAvailableMonths] = useState<string[]>([]);
     const [envelopes, setEnvelopes] = useState<EnvelopeWithStats[]>([]);
     const [loading, setLoading] = useState(true);
-    const [totalSavings, setTotalSavings] = useState(0);
+    const [totalSavings, setTotalSavings] = useState<{ real: number; potential: number }>({ real: 0, potential: 0 });
+    const [randomQuote, setRandomQuote] = useState('');
     const [isCurrentMonth, setIsCurrentMonth] = useState(true);
 
     // Quick Add Modal State
@@ -117,6 +118,9 @@ export default function DashboardPage() {
 
     useEffect(() => {
         loadData();
+        // Pick random quote once per session
+        const randomIndex = Math.floor(Math.random() * SPIRITUAL_QUOTES.length);
+        setRandomQuote(SPIRITUAL_QUOTES[randomIndex]);
     }, [loadData]);
 
     const totalBudget = envelopes.reduce((s, e) => s + e.initialAmount, 0);
@@ -178,6 +182,11 @@ export default function DashboardPage() {
 
     return (
         <AppShell>
+            {randomQuote && (
+                <div className="spiritual-header glass-card">
+                    <p className="arabic-text">{randomQuote}</p>
+                </div>
+            )}
             <div className="page-header">
                 <div>
                     <h1 className="page-title">Dashboard</h1>
@@ -226,9 +235,15 @@ export default function DashboardPage() {
                         </div>
                         <div className="glass-card summary-card">
                             <div className="summary-label">Total d'Épargne</div>
-                            <div className="summary-value positive">{totalSavings.toLocaleString('fr-FR')} {CURRENCY}</div>
+                            <div className="summary-value positive">
+                                {totalSavings.real.toLocaleString('fr-FR')} {CURRENCY}
+                            </div>
                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                Cumul des anciens mois
+                                {isCurrentMonth ? (
+                                    <>Potentiel ce mois : <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>{totalSavings.potential.toLocaleString('fr-FR')} {CURRENCY}</span></>
+                                ) : (
+                                    "Cumul des mois écoulés"
+                                )}
                             </div>
                         </div>
                         <div className="glass-card summary-card">
