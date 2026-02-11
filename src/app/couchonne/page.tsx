@@ -15,9 +15,11 @@ export default function CouchonnePage() {
     const [activeCouch, setActiveCouch] = useState<Couchonne | null>(null);
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
+    const [effects, setEffects] = useState<{ id: string, x: number, y: number, isMajor: boolean }[]>([]);
 
     // Creation state
     const [targetAmount, setTargetAmount] = useState('10000');
+    const [couchonneName, setCouchonneName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     const loadData = useCallback(async () => {
@@ -27,7 +29,13 @@ export default function CouchonnePage() {
             const data = await getCouchonnes(user.uid);
             setCouchonnes(data);
             if (data.length > 0) {
-                setActiveCouch(data[0]);
+                // Keep current if still exists, otherwise pick first
+                setActiveCouch(prev => {
+                    const exists = data.find(c => c.id === prev?.id);
+                    return exists || data[0];
+                });
+            } else {
+                setActiveCouch(null);
             }
         } catch (error) {
             console.error('Error loading Couchonnes:', error);
@@ -43,7 +51,12 @@ export default function CouchonnePage() {
     const handleCreate = async () => {
         if (!user) return;
         const target = parseFloat(targetAmount);
+        const name = couchonneName.trim() || `Défi ${couchonnes.length + 1}`;
         if (isNaN(target) || target <= 0) return;
+        if (couchonnes.length >= 3) {
+            alert('Vous ne pouvez pas avoir plus de 3 Couchonnes actives.');
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -62,6 +75,7 @@ export default function CouchonnePage() {
 
             const newCouch: Omit<Couchonne, 'createdAt'> = {
                 id: crypto.randomUUID(),
+                name: name,
                 targetAmount: target,
                 denominations: generated.sort((a, b) => b - a),
                 checkedIndices: []
@@ -77,10 +91,38 @@ export default function CouchonnePage() {
         }
     };
 
-    const toggleBubble = async (index: number) => {
+    const triggerEffect = (e: React.MouseEvent, val: number) => {
+        const isMajor = val >= 50;
+
+        // Vibration (Haptique)
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(isMajor ? [40, 20, 40] : 20);
+        }
+
+        // Particules (Visuel)
+        const id = Math.random().toString(36).substring(7);
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+
+        setEffects(prev => [...prev, { id, x, y, isMajor }]);
+        setTimeout(() => {
+            setEffects(prev => prev.filter(eff => eff.id !== id));
+        }, 800);
+    };
+
+    const toggleBubble = async (e: React.MouseEvent, index: number) => {
         if (!user || !activeCouch) return;
 
-        const newIndices = activeCouch.checkedIndices.includes(index)
+        const val = activeCouch.denominations[index];
+        const isCurrentlyChecked = activeCouch.checkedIndices.includes(index);
+
+        // Trigger effect ONLY when checking (not unchecking)
+        if (!isCurrentlyChecked) {
+            triggerEffect(e, val);
+        }
+
+        const newIndices = isCurrentlyChecked
             ? activeCouch.checkedIndices.filter(i => i !== index)
             : [...activeCouch.checkedIndices, index];
 
@@ -116,18 +158,33 @@ export default function CouchonnePage() {
                     <h1 className="page-title">La Couchonne 🐷</h1>
                     <p className="page-subtitle">Petites économies, grands projets</p>
                 </div>
-                {!activeCouch && !loading && (
-                    <button className="btn btn-primary" onClick={() => setIsCreating(true)}>
+                {!loading && couchonnes.length < 3 && !isCreating && (
+                    <button className="btn btn-primary" onClick={() => {
+                        setCouchonneName('');
+                        setTargetAmount('10000');
+                        setIsCreating(true);
+                    }}>
                         🎯 Nouveau Défi
                     </button>
                 )}
             </div>
+
 
             {loading ? (
                 <div className="loading-container"><div className="spinner" /></div>
             ) : isCreating ? (
                 <div className="glass-card" style={{ maxWidth: '500px', margin: '2rem auto', padding: '2rem' }}>
                     <h2 style={{ marginBottom: '1.5rem' }}>Démarrer un défi</h2>
+                    <div className="form-group">
+                        <label className="form-label">Nom du défi</label>
+                        <input
+                            className="form-input"
+                            type="text"
+                            value={couchonneName}
+                            onChange={(e) => setCouchonneName(e.target.value)}
+                            placeholder="ex: Voyage, Nouveau Mac..."
+                        />
+                    </div>
                     <div className="form-group">
                         <label className="form-label">Montant souhaité ({CURRENCY})</label>
                         <input
@@ -149,44 +206,72 @@ export default function CouchonnePage() {
                     </div>
                 </div>
             ) : !activeCouch ? (
-                <div className="empty-state">
-                    <div className="empty-icon">🐷</div>
-                    <p className="empty-text">Vous n'avez pas encore de Couchonne active.</p>
-                    <button className="btn btn-primary" onClick={() => setIsCreating(true)} style={{ marginTop: '1rem' }}>
-                        Créer ma première Couchonne
-                    </button>
+                <div className="couchonne-dashboard">
+                    <div className="cards-grid">
+                        {couchonnes.map((c) => {
+                            const total = c.checkedIndices.reduce((sum, idx) => sum + c.denominations[idx], 0);
+                            const prog = (total / c.targetAmount) * 100;
+                            return (
+                                <div
+                                    key={c.id}
+                                    className="sublime-card"
+                                    onClick={() => setActiveCouch(c)}
+                                >
+                                    <div className="card-header">
+                                        <span className="card-name">{c.name}</span>
+                                        <span className="card-percent">{Math.floor(prog)}%</span>
+                                    </div>
+                                    <div className="card-main">
+                                        <div className="card-amount">
+                                            {total.toLocaleString('fr-FR')} / {c.targetAmount.toLocaleString('fr-FR')} {CURRENCY}
+                                        </div>
+                                        <div className="card-progress-bar">
+                                            <div className="progress-fill" style={{ width: `${prog}%` }} />
+                                        </div>
+                                    </div>
+                                    <div className="card-footer">
+                                        <span>{c.denominations.length - c.checkedIndices.length} bulles restantes</span>
+                                        <span className="card-arrow">→</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {couchonnes.length < 3 && (
+                            <div className="add-card" onClick={() => setIsCreating(true)}>
+                                <div className="add-icon">+</div>
+                                <div className="add-text">Nouveau défi</div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             ) : (
-                <div className="couchonne-container">
-                    <div className="summary-grid" style={{ marginBottom: '2rem' }}>
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Objectif</div>
-                            <div className="summary-value" style={{ color: 'var(--text-primary)' }}>
-                                {activeCouch.targetAmount.toLocaleString('fr-FR')} {CURRENCY}
-                            </div>
-                        </div>
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Collecté</div>
-                            <div className="summary-value positive">
-                                {currentTotal.toLocaleString('fr-FR')} {CURRENCY}
-                            </div>
-                        </div>
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Progression</div>
-                            <div className="summary-value" style={{ color: 'var(--warning)' }}>
-                                {Math.floor(progress)}%
-                            </div>
-                        </div>
-                    </div>
+                <div className="couchonne-detail">
+                    <button className="back-btn" onClick={() => setActiveCouch(null)}>
+                        ← Retour aux défis
+                    </button>
 
-                    <div className="glass-card" style={{ marginBottom: '2rem', padding: '1.5rem' }}>
-                        <div style={{ height: '12px', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', overflow: 'hidden' }}>
-                            <div style={{
-                                height: '100%',
-                                width: `${progress}%`,
-                                background: 'linear-gradient(90deg, var(--primary), var(--success))',
-                                transition: 'width 0.5s ease'
-                            }} />
+                    <div className="detail-header glass-card">
+                        <h2 className="detail-title">{activeCouch.name}</h2>
+                        <div className="detail-stats">
+                            <div className="stat-item">
+                                <span className="stat-label">Objectif</span>
+                                <span className="stat-value">{activeCouch.targetAmount.toLocaleString('fr-FR')} {CURRENCY}</span>
+                            </div>
+                            <div className="stat-divider" />
+                            <div className="stat-item">
+                                <span className="stat-label">Collecté</span>
+                                <span className="stat-value positive">{currentTotal.toLocaleString('fr-FR')} {CURRENCY}</span>
+                            </div>
+                            <div className="stat-divider" />
+                            <div className="stat-item">
+                                <span className="stat-label">Progression</span>
+                                <span className="stat-value warning">{Math.floor(progress)}%</span>
+                            </div>
+                        </div>
+                        <div className="detail-progress-wrapper">
+                            <div className="detail-progress-bar">
+                                <div className="detail-progress-fill" style={{ width: `${progress}%` }} />
+                            </div>
                         </div>
                     </div>
 
@@ -197,7 +282,7 @@ export default function CouchonnePage() {
                                 <div
                                     key={idx}
                                     className={`bubble ${isChecked ? 'checked' : ''}`}
-                                    onClick={() => toggleBubble(idx)}
+                                    onClick={(e) => toggleBubble(e, idx)}
                                 >
                                     {val}
                                 </div>
@@ -205,15 +290,196 @@ export default function CouchonnePage() {
                         })}
                     </div>
 
+                    {/* Effets de particules */}
+                    {effects.map(eff => (
+                        <div
+                            key={eff.id}
+                            className={`particle-container ${eff.isMajor ? 'major' : 'minor'}`}
+                            style={{ left: eff.x, top: eff.y }}
+                        >
+                            {[...Array(eff.isMajor ? 12 : 6)].map((_, i) => (
+                                <div key={i} className="particle" style={{ '--angle': `${i * (360 / (eff.isMajor ? 12 : 6))}deg` } as any} />
+                            ))}
+                        </div>
+                    ))}
+
                     <div style={{ marginTop: '3rem', textAlign: 'center' }}>
                         <button className="btn btn-danger btn-sm" onClick={() => handleDelete(activeCouch.id)}>
-                            Abandonner le défi
+                            Abandonner le défi "{activeCouch.name}"
                         </button>
                     </div>
                 </div>
             )}
 
             <style jsx>{`
+                .cards-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                    gap: 1.5rem;
+                    padding: 1rem 0;
+                }
+                .sublime-card {
+                    background: rgba(255, 255, 255, 0.05);
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 20px;
+                    padding: 1.5rem;
+                    cursor: pointer;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.2rem;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .sublime-card:hover {
+                    transform: translateY(-5px);
+                    background: rgba(255, 255, 255, 0.08);
+                    border-color: var(--accent-primary);
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                }
+                .sublime-card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: linear-gradient(135deg, transparent, rgba(129, 140, 248, 0.05));
+                    pointer-events: none;
+                }
+                .card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .card-name {
+                    font-size: 1.2rem;
+                    font-weight: 700;
+                    color: white;
+                }
+                .card-percent {
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    color: var(--warning);
+                    background: rgba(251, 191, 36, 0.1);
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                }
+                .card-amount {
+                    font-size: 0.85rem;
+                    opacity: 0.7;
+                    margin-bottom: 0.5rem;
+                }
+                .card-progress-bar {
+                    height: 8px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 4px;
+                    overflow: hidden;
+                    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+                }
+                .progress-fill {
+                    height: 100%;
+                    background: linear-gradient(90deg, var(--accent-primary), var(--success));
+                    transition: width 0.6s ease;
+                    box-shadow: 0 0 10px rgba(129, 140, 248, 0.5);
+                }
+                .card-footer {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 0.8rem;
+                    opacity: 0.6;
+                    margin-top: auto;
+                }
+                .card-arrow {
+                    font-size: 1.2rem;
+                    transition: transform 0.3s ease;
+                }
+                .sublime-card:hover .card-arrow {
+                    transform: translateX(5px);
+                    color: var(--accent-primary);
+                }
+                .add-card {
+                    border: 2px dashed rgba(255,255,255,0.1);
+                    border-radius: 20px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 1rem;
+                    cursor: pointer;
+                    min-height: 180px;
+                    transition: all 0.3s ease;
+                    opacity: 0.7;
+                }
+                .add-card:hover {
+                    opacity: 1;
+                    border-color: var(--accent-primary);
+                    background: rgba(129, 140, 248, 0.05);
+                }
+                .add-icon {
+                    font-size: 2.5rem;
+                    font-weight: 200;
+                }
+                .back-btn {
+                    background: none;
+                    border: none;
+                    color: var(--accent-primary);
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    margin-bottom: 1.5rem;
+                    padding: 0;
+                }
+                .detail-header {
+                    padding: 2rem;
+                    margin-bottom: 2rem;
+                }
+                .detail-title {
+                    font-size: 1.8rem;
+                    margin-bottom: 1.5rem;
+                    text-align: center;
+                }
+                .detail-stats {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 2rem;
+                    margin-bottom: 2rem;
+                }
+                .stat-item {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+                .stat-label {
+                    font-size: 0.8rem;
+                    opacity: 0.6;
+                    margin-bottom: 0.4rem;
+                }
+                .stat-value {
+                    font-size: 1.2rem;
+                    font-weight: 700;
+                }
+                .stat-divider {
+                    width: 1px;
+                    height: 30px;
+                    background: rgba(255,255,255,0.1);
+                }
+                .detail-progress-wrapper {
+                    max-width: 600px;
+                    margin: 0 auto;
+                }
+                .detail-progress-bar {
+                    height: 12px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 6px;
+                    overflow: hidden;
+                    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+                }
+                .detail-progress-fill {
+                    height: 100%;
+                    background: linear-gradient(90deg, var(--accent-primary), var(--success));
+                    transition: width 0.6s ease;
+                    box-shadow: 0 0 15px rgba(129, 140, 248, 0.5);
+                }
                 .bubble-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
@@ -236,8 +502,8 @@ export default function CouchonnePage() {
                 }
                 .bubble:hover {
                     transform: scale(1.1);
-                    border-color: var(--primary);
-                    background: rgba(var(--primary-rgb), 0.1);
+                    border-color: var(--accent-primary);
+                    background: rgba(129, 140, 248, 0.1);
                 }
                 .bubble.checked {
                     background: var(--success);
@@ -245,7 +511,7 @@ export default function CouchonnePage() {
                     border-color: white;
                     color: white;
                     transform: scale(0.95);
-                    box-shadow: 0 0 15px rgba(var(--success-rgb), 0.4);
+                    box-shadow: 0 0 15px rgba(52, 211, 153, 0.4);
                     text-decoration: line-through;
                     opacity: 0.8;
                 }
@@ -254,6 +520,58 @@ export default function CouchonnePage() {
                     position: absolute;
                     font-size: 1.5rem;
                     opacity: 0.3;
+                }
+
+                /* Particules */
+                .particle-container {
+                    position: fixed;
+                    pointer-events: none;
+                    z-index: 1000;
+                }
+                .particle {
+                    position: absolute;
+                    border-radius: 50%;
+                    transform: translate(-50%, -50%);
+                    animation-timing-function: cubic-bezier(0.1, 0.5, 0.3, 1);
+                    animation-fill-mode: forwards;
+                }
+                @keyframes particle-burst-major {
+                    0% {
+                        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0);
+                        opacity: 1;
+                        scale: 1;
+                    }
+                    100% {
+                        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(80px);
+                        opacity: 0;
+                        scale: 0.2;
+                    }
+                }
+                @keyframes particle-burst-minor {
+                    0% {
+                        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0);
+                        opacity: 1;
+                        scale: 0.8;
+                    }
+                    100% {
+                        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(40px);
+                        opacity: 0;
+                        scale: 0.2;
+                    }
+                }
+                .major .particle {
+                    width: 8px;
+                    height: 8px;
+                    background: var(--warning);
+                    box-shadow: 0 0 10px var(--warning);
+                    animation-name: particle-burst-major;
+                }
+                .minor .particle {
+                    width: 6px;
+                    height: 6px;
+                    background: var(--success);
+                    animation-name: particle-burst-minor;
+                    animation-duration: 0.4s;
                 }
                 @media (max-width: 480px) {
                     .bubble-grid {

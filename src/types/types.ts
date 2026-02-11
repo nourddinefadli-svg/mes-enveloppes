@@ -52,6 +52,7 @@ export interface Project {
 
 export interface Couchonne {
     id: string;
+    name: string;
     targetAmount: number;
     denominations: number[]; // Tous les billets/pièces générés
     checkedIndices: number[]; // Indices des ronds cochés
