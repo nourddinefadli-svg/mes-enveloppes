@@ -9,6 +9,7 @@ export interface Month {
 export interface Envelope {
     id: string;
     name: string;
+    displayName?: string;
     initialAmount: number;
     carryOver?: number; // Report du mois précédent (+ ou -)
 }
@@ -27,6 +28,7 @@ export interface EnvelopeWithStats extends Envelope {
     percentage: number;
     carryOver: number;
     adjustment: number;
+    displayName?: string;
 }
 
 export interface Subscription {

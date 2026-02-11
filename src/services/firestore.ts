@@ -49,14 +49,17 @@ export async function getMonths(uid: string): Promise<Month[]> {
 export async function initializeEnvelopes(
     uid: string,
     monthId: string,
-    amounts: Record<EnvelopeClassId, number>
+    amounts: Record<EnvelopeClassId, number>,
+    displayNames?: Record<string, string>
 ): Promise<void> {
     await createMonth(uid, monthId);
 
     for (const cls of ENVELOPE_CLASSES) {
         const envelopeRef = doc(getDbInstance(), 'users', uid, 'months', monthId, 'envelopes', cls.id);
+        const label = displayNames?.[cls.id] || ENVELOPE_CLASSES.find(c => c.id === cls.id)?.label || cls.id;
         await setDoc(envelopeRef, {
             name: cls.id,
+            displayName: label,
             initialAmount: amounts[cls.id] || 0,
         });
     }
@@ -68,10 +71,20 @@ export async function getEnvelopes(uid: string, monthId: string): Promise<Envelo
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Envelope));
 }
 
+export async function updateEnvelopeName(
+    uid: string,
+    monthId: string,
+    envelopeId: string,
+    newDisplayName: string
+): Promise<void> {
+    const envelopeRef = doc(getDbInstance(), 'users', uid, 'months', monthId, 'envelopes', envelopeId);
+    await updateDoc(envelopeRef, { displayName: newDisplayName });
+}
+
 export async function getEnvelopesForPreviousMonth(
     uid: string,
     currentMonthId: string
-): Promise<Record<EnvelopeClassId, number> | null> {
+): Promise<{ amounts: Record<EnvelopeClassId, number>, displayNames: Record<string, string> } | null> {
     const [year, month] = currentMonthId.split('-').map(Number);
     let prevYear = year;
     let prevMonth = month - 1;
@@ -85,10 +98,12 @@ export async function getEnvelopesForPreviousMonth(
     if (envelopes.length === 0) return null;
 
     const amounts: Record<string, number> = {};
+    const displayNames: Record<string, string> = {};
     for (const env of envelopes) {
         amounts[env.name] = env.initialAmount;
+        displayNames[env.name] = env.displayName || env.name;
     }
-    return amounts as Record<EnvelopeClassId, number>;
+    return { amounts: amounts as Record<EnvelopeClassId, number>, displayNames };
 }
 
 // ===================== EXPENSES =====================
@@ -154,16 +169,16 @@ export async function deleteExpense(
 export async function getCumulativeEnvelopes(
     uid: string,
     targetMonthId: string
-): Promise<Record<string, { initial: number; spent: number; carryOver: number; adjustment: number }>> {
+): Promise<Record<string, { initial: number; spent: number; carryOver: number; adjustment: number; displayName?: string }>> {
     const monthsRef = collection(getDbInstance(), 'users', uid, 'months');
     const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'asc')));
     const monthIds = monthsSnap.docs
         .map((d) => d.id)
         .filter((id) => id <= targetMonthId && id !== '0000-00');
 
-    const cumulative: Record<string, { initial: number; spent: number; carryOver: number; adjustment: number }> = {};
+    const cumulative: Record<string, { initial: number; spent: number; carryOver: number; adjustment: number; displayName?: string }> = {};
     for (const cls of ENVELOPE_CLASSES) {
-        cumulative[cls.id] = { initial: 0, spent: 0, carryOver: 0, adjustment: 0 };
+        cumulative[cls.id] = { initial: 0, spent: 0, carryOver: 0, adjustment: 0, displayName: cls.label };
     }
 
     // Reports pour l'itération
@@ -191,6 +206,7 @@ export async function getCumulativeEnvelopes(
                 cumulative[cls.id].initial = initial;
                 cumulative[cls.id].spent = spent;
                 cumulative[cls.id].carryOver = currentCarryOver[cls.id];
+                cumulative[cls.id].displayName = envelope?.displayName || cls.label;
             }
 
             if (cls.id !== 'epargne' && remaining < 0) {

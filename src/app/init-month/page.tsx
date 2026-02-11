@@ -13,6 +13,7 @@ export default function InitMonthPage() {
     const monthId = getCurrentMonthId();
 
     const [amounts, setAmounts] = useState<Record<string, number>>({});
+    const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(false);
     const [alreadyInit, setAlreadyInit] = useState(false);
     const [loadingPrev, setLoadingPrev] = useState(false);
@@ -24,18 +25,24 @@ export default function InitMonthPage() {
             const envs = await getEnvelopes(user.uid, monthId);
             if (envs.length > 0) {
                 setAlreadyInit(true);
-                const existing: Record<string, number> = {};
+                const existingAmounts: Record<string, number> = {};
+                const existingNames: Record<string, string> = {};
                 for (const env of envs) {
-                    existing[env.name] = env.initialAmount;
+                    existingAmounts[env.name] = env.initialAmount;
+                    existingNames[env.name] = env.displayName || ENVELOPE_CLASSES.find(c => c.id === env.name)?.label || env.name;
                 }
-                setAmounts(existing);
+                setAmounts(existingAmounts);
+                setDisplayNames(existingNames);
             } else {
-                // Default all to 0
-                const defaults: Record<string, number> = {};
+                // Default all to 0 and default labels
+                const defaultAmounts: Record<string, number> = {};
+                const defaultNames: Record<string, string> = {};
                 for (const cls of ENVELOPE_CLASSES) {
-                    defaults[cls.id] = 0;
+                    defaultAmounts[cls.id] = 0;
+                    defaultNames[cls.id] = cls.label;
                 }
-                setAmounts(defaults);
+                setAmounts(defaultAmounts);
+                setDisplayNames(defaultNames);
             }
         }
         checkExisting();
@@ -46,14 +53,19 @@ export default function InitMonthPage() {
         setAmounts((prev) => ({ ...prev, [id]: num }));
     };
 
+    const handleNameChange = (id: string, value: string) => {
+        setDisplayNames((prev) => ({ ...prev, [id]: value }));
+    };
+
     const handleLoadPrevious = async () => {
         if (!user) return;
         setLoadingPrev(true);
         try {
             const prev = await getEnvelopesForPreviousMonth(user.uid, monthId);
             if (prev) {
-                setAmounts(prev);
-                showToast('Montants du mois précédent chargés !');
+                setAmounts(prev.amounts);
+                setDisplayNames(prev.displayNames);
+                showToast('Données du mois précédent chargées !');
             } else {
                 showToast('Aucun mois précédent trouvé.');
             }
@@ -69,7 +81,12 @@ export default function InitMonthPage() {
         if (!user) return;
         setLoading(true);
         try {
-            await initializeEnvelopes(user.uid, monthId, amounts as Record<EnvelopeClassId, number>);
+            await initializeEnvelopes(
+                user.uid,
+                monthId,
+                amounts as Record<EnvelopeClassId, number>,
+                displayNames
+            );
             showToast('Mois initialisé avec succès !');
             setTimeout(() => router.push('/dashboard'), 1000);
         } catch (err) {
@@ -112,7 +129,13 @@ export default function InitMonthPage() {
                         <div key={cls.id} className="glass-card init-card">
                             <div className="init-icon">{cls.icon}</div>
                             <div className="init-fields">
-                                <div className="init-label">{cls.label}</div>
+                                <input
+                                    className="name-input"
+                                    type="text"
+                                    value={displayNames[cls.id] || ''}
+                                    onChange={(e) => handleNameChange(cls.id, e.target.value)}
+                                    placeholder={cls.label}
+                                />
                                 <input
                                     className="form-input"
                                     type="number"
@@ -147,6 +170,30 @@ export default function InitMonthPage() {
             </form>
 
             {toast && <div className="toast">{toast}</div>}
+
+            <style jsx>{`
+                .name-input {
+                    background: none;
+                    border: none;
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                    color: white;
+                    font-weight: 600;
+                    font-size: 0.95rem;
+                    padding: 4px 0;
+                    margin-bottom: 8px;
+                    width: 100%;
+                    outline: none;
+                    transition: border-color 0.2s;
+                }
+                .name-input:focus {
+                    border-bottom-color: var(--accent-primary);
+                }
+                .init-fields {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                }
+            `}</style>
         </AppShell>
     );
 }

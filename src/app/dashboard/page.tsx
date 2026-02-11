@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
-import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense, getTotalSavings } from '@/services/firestore';
+import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense, getTotalSavings, updateEnvelopeName } from '@/services/firestore';
 import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel, SPIRITUAL_QUOTES } from '@/lib/constants';
 import { EnvelopeWithStats, Envelope, Expense } from '@/types/types';
 import { useRouter } from 'next/navigation';
@@ -90,6 +90,7 @@ export default function DashboardPage() {
                 return {
                     id: envelope?.id || cls.id,
                     name: cls.id,
+                    displayName: data?.displayName || cls.label,
                     initialAmount: initial,
                     spent,
                     carryOver,
@@ -270,7 +271,10 @@ export default function DashboardPage() {
                                     <div className="envelope-header">
                                         <div className="envelope-name">
                                             <span className="envelope-icon">{info.icon}</span>
-                                            {info.label}
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontWeight: 700 }}>{env.displayName || info.label}</span>
+                                                <span style={{ fontSize: '0.65rem', opacity: 0.5, textTransform: 'uppercase' }}>{info.label}</span>
+                                            </div>
                                         </div>
                                         <span className={`envelope-percentage ${status}`}>
                                             {env.percentage}% <span style={{ fontSize: '0.7rem', fontWeight: 500, opacity: 0.7 }}>restant</span>
@@ -377,6 +381,21 @@ export default function DashboardPage() {
             )}
 
             {toast && <div className="toast">{toast}</div>}
+
+            <style jsx>{`
+                .toast {
+                    position: fixed;
+                    bottom: 6rem;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--accent-primary);
+                    color: white;
+                    padding: 0.8rem 1.5rem;
+                    border-radius: var(--radius-lg);
+                    z-index: 1000;
+                    animation: slideUp 0.3s ease;
+                }
+            `}</style>
         </AppShell>
     );
 }
