@@ -151,6 +151,7 @@ export default function CouchonnePage() {
 
         const updatedCouch = { ...activeCouch, checkedIndices: newIndices };
         setActiveCouch(updatedCouch); // Optimistic UI
+        setCouchonnes(prev => prev.map(c => c.id === updatedCouch.id ? updatedCouch : c));
 
         try {
             await saveCouchonne(user.uid, updatedCouch);
