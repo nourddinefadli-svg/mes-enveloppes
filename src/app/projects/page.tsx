@@ -50,6 +50,7 @@ export default function ProjectsPage() {
             setProjects(data);
             setRealSavings(savings.real);
             setManualInjection(injection);
+            if (injection > 0) setInjectAmount(injection.toString());
         } catch (error) {
             console.error('Error loading projects:', error);
         } finally {
@@ -180,7 +181,7 @@ export default function ProjectsPage() {
                             onClick={() => setIsInjectModalOpen(true)}
                             style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '0.7rem' }}
                         >
-                            💉 Injecter
+                            💉 {manualInjection > 0 ? 'Modifier Apport' : 'Injecter Apport'}
                         </button>
                     </div>
                 </div>
