@@ -1041,3 +1041,23 @@ body {
 .project-card:hover .padlock-icon {
   transform: scale(1.2);
 }
+
+/* ======= STICKY MOBILE SUMMARY ======= */
+@media (max-width: 768px) {
+  .sticky-mobile-summary {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin: -1rem -1rem 1.5rem -1rem; /* Adjust based on AppShell padding */
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-glass);
+  }
+  
+  .sticky-mobile-summary > .summary-grid {
+    margin-bottom: 0 !important;
+  }
+}
+

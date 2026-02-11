@@ -125,16 +125,35 @@ export default function ProjectsPage() {
         }
     };
 
+    const sortedProjects = [...projects].sort((a, b) => {
+        // 1. Availability (Affordable first)
+        const aAffordable = realSavings >= a.amount;
+        const bAffordable = realSavings >= b.amount;
+        if (aAffordable && !bAffordable) return -1;
+        if (!aAffordable && bAffordable) return 1;
+
+        // 2. Date (Closest first)
+        const aDate = a.date.toMillis();
+        const bDate = b.date.toMillis();
+        if (aDate !== bDate) return aDate - bDate;
+
+        // 3. Priority (High > Medium > Low)
+        const priorityScore = { high: 3, medium: 2, low: 1 };
+        return priorityScore[b.priority] - priorityScore[a.priority];
+    });
+
     return (
         <AppShell>
-            <div className="summary-grid" style={{ marginBottom: '2rem' }}>
-                <div className="glass-card summary-card">
-                    <div className="summary-label">Budget Disponible</div>
-                    <div className="summary-value positive">
-                        {realSavings.toLocaleString('fr-FR')} {CURRENCY}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                        Épargne réelle cumulée
+            <div className="sticky-mobile-summary">
+                <div className="summary-grid" style={{ marginBottom: '2rem' }}>
+                    <div className="glass-card summary-card">
+                        <div className="summary-label">Budget Disponible</div>
+                        <div className="summary-value positive">
+                            {realSavings.toLocaleString('fr-FR')} {CURRENCY}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                            Épargne réelle cumulée
+                        </div>
                     </div>
                 </div>
             </div>
@@ -153,14 +172,14 @@ export default function ProjectsPage() {
                 <div className="loading-container">
                     <div className="spinner" />
                 </div>
-            ) : projects.length === 0 ? (
+            ) : sortedProjects.length === 0 ? (
                 <div className="empty-state">
                     <div className="empty-icon">🎯</div>
                     <p className="empty-text">Aucun projet en vue. Planifiez votre prochain achat !</p>
                 </div>
             ) : (
                 <div className="summary-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-                    {projects.map((p) => {
+                    {sortedProjects.map((p) => {
                         const isAffordable = realSavings >= p.amount;
                         return (
                             <div
