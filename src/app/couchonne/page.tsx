@@ -5,12 +5,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
 import { getCouchonnes, saveCouchonne, deleteCouchonne } from '@/services/firestore';
 import { Couchonne } from '@/types/types';
-import { CURRENCY } from '@/lib/constants';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const DENOMINATIONS = [200, 100, 50, 20, 10, 5, 2, 1];
 
 export default function CouchonnePage() {
     const { user } = useAuth();
+    const { t, isRTL } = useLanguage();
     const [couchonnes, setCouchonnes] = useState<Couchonne[]>([]);
     const [activeCouch, setActiveCouch] = useState<Couchonne | null>(null);
     const [loading, setLoading] = useState(true);
@@ -32,17 +33,11 @@ export default function CouchonnePage() {
         try {
             const data = await getCouchonnes(user.uid);
             setCouchonnes(data);
-            if (data.length > 0) {
-                // Only update the active one if we already had one selected (e.g., after an update)
-                // If it's the initial load (prev is null), we keep it null to show the overview list
-                setActiveCouch(prev => {
-                    if (!prev) return null;
-                    const exists = data.find(c => c.id === prev.id);
-                    return exists || null;
-                });
-            } else {
-                setActiveCouch(null);
-            }
+            setActiveCouch(prev => {
+                if (!prev) return null;
+                const exists = data.find(c => c.id === prev.id);
+                return exists || null;
+            });
         } catch (error) {
             console.error('Error loading Couchonnes:', error);
         } finally {
@@ -57,22 +52,20 @@ export default function CouchonnePage() {
     const handleCreate = async () => {
         if (!user) return;
         const target = parseFloat(targetAmount);
-        const name = couchonneName.trim() || `Défi ${couchonnes.length + 1}`;
+        const name = couchonneName.trim() || `${isRTL ? 'تحدي' : 'Défi'} ${couchonnes.length + 1}`;
         if (isNaN(target) || target <= 0) return;
         if (couchonnes.length >= 3) {
-            alert('Vous ne pouvez pas avoir plus de 3 Couchonnes actives.');
+            alert(t('couchonne.maxChallenges'));
             return;
         }
 
         setIsSaving(true);
         try {
-            // Génération des billets
             let remaining = target;
             const generated: number[] = [];
             while (remaining > 0) {
                 const available = DENOMINATIONS.filter(d => d <= remaining);
                 if (available.length === 0) break;
-                // On privilégie un mélange
                 const randIndex = Math.floor(Math.random() * Math.min(available.length, 3));
                 const picked = available[randIndex];
                 generated.push(picked);
@@ -100,18 +93,13 @@ export default function CouchonnePage() {
 
     const triggerEffect = (e: React.MouseEvent, val: number) => {
         const isMajor = val >= 50;
-
-        // Vibration (Haptique)
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
             navigator.vibrate(isMajor ? [40, 20, 40] : 20);
         }
-
-        // Particules (Visuel)
         const id = Math.random().toString(36).substring(7);
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const x = rect.left + rect.width / 2;
         const y = rect.top + rect.height / 2;
-
         setEffects(prev => [...prev, { id, x, y, isMajor }]);
         setTimeout(() => {
             setEffects(prev => prev.filter(eff => eff.id !== id));
@@ -136,33 +124,25 @@ export default function CouchonnePage() {
 
     const toggleBubble = async (e: React.MouseEvent, index: number) => {
         if (!user || !activeCouch) return;
-
         const val = activeCouch.denominations[index];
         const isCurrentlyChecked = activeCouch.checkedIndices.includes(index);
-
-        // Trigger effect ONLY when checking (not unchecking)
-        if (!isCurrentlyChecked) {
-            triggerEffect(e, val);
-        }
-
+        if (!isCurrentlyChecked) triggerEffect(e, val);
         const newIndices = isCurrentlyChecked
             ? activeCouch.checkedIndices.filter(i => i !== index)
             : [...activeCouch.checkedIndices, index];
-
         const updatedCouch = { ...activeCouch, checkedIndices: newIndices };
-        setActiveCouch(updatedCouch); // Optimistic UI
+        setActiveCouch(updatedCouch);
         setCouchonnes(prev => prev.map(c => c.id === updatedCouch.id ? updatedCouch : c));
-
         try {
             await saveCouchonne(user.uid, updatedCouch);
         } catch (error) {
             console.error('Error updating bubble:', error);
-            loadData(); // Revert on error
+            loadData();
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!user || !confirm('Supprimer cette Couchonne définitivement ?')) return;
+        if (!user || !confirm(t('couchonne.confirmDelete'))) return;
         try {
             await deleteCouchonne(user.uid, id);
             if (activeCouch?.id === id) setActiveCouch(null);
@@ -179,8 +159,8 @@ export default function CouchonnePage() {
         <AppShell>
             <div className="page-header">
                 <div>
-                    <h1 className="page-title">La Couchonne 🐷</h1>
-                    <p className="page-subtitle">Petites économies, grands projets</p>
+                    <h1 className="page-title">{t('couchonne.title')} 🐷</h1>
+                    <p className="page-subtitle">{t('couchonne.subtitle')}</p>
                 </div>
                 {!loading && couchonnes.length < 3 && !isCreating && (
                     <button className="btn btn-primary" onClick={() => {
@@ -188,44 +168,43 @@ export default function CouchonnePage() {
                         setTargetAmount('10000');
                         setIsCreating(true);
                     }}>
-                        🎯 Nouveau Défi
+                        {t('couchonne.newChallenge')}
                     </button>
                 )}
             </div>
-
 
             {loading ? (
                 <div className="loading-container"><div className="spinner" /></div>
             ) : isCreating ? (
                 <div className="glass-card" style={{ maxWidth: '500px', margin: '2rem auto', padding: '2rem' }}>
-                    <h2 style={{ marginBottom: '1.5rem' }}>Démarrer un défi</h2>
+                    <h2 style={{ marginBottom: '1.5rem' }}>{t('couchonne.startChallenge')}</h2>
                     <div className="form-group">
-                        <label className="form-label">Nom du défi</label>
+                        <label className="form-label">{t('couchonne.challengeName')}</label>
                         <input
                             className="form-input"
                             type="text"
                             value={couchonneName}
                             onChange={(e) => setCouchonneName(e.target.value)}
-                            placeholder="ex: Voyage, Nouveau Mac..."
+                            placeholder="..."
                         />
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Montant souhaité ({CURRENCY})</label>
+                        <label className="form-label">{t('couchonne.targetAmount')} ({t('common.currency')})</label>
                         <input
                             className="form-input"
                             type="number"
                             value={targetAmount}
                             onChange={(e) => setTargetAmount(e.target.value)}
-                            placeholder="ex: 10000"
+                            placeholder="..."
                         />
                         <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem' }}>
-                            L'application va générer une liste de billets à cocher pour atteindre cet objectif.
+                            {t('couchonne.generateHelp')}
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                        <button className="btn btn-secondary" onClick={() => setIsCreating(false)}>Annuler</button>
+                        <button className="btn btn-secondary" onClick={() => setIsCreating(false)}>{t('common.cancel')}</button>
                         <button className="btn btn-primary" onClick={handleCreate} disabled={isSaving}>
-                            {isSaving ? 'Génération...' : 'Lancer le défi !'}
+                            {isSaving ? t('couchonne.generating') : t('couchonne.launchChallenge')}
                         </button>
                     </div>
                 </div>
@@ -246,17 +225,17 @@ export default function CouchonnePage() {
                                         <span className="card-percent">{Math.floor(prog)}%</span>
                                     </div>
                                     <div className="card-main">
-                                        <div className="card-amount" style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                                        <div className="card-amount" style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                             <span style={{ fontSize: '1.2rem', fontWeight: 800 }}>{total.toLocaleString('fr-FR')}</span>
-                                            <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>/ {c.targetAmount.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                            <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>/ {c.targetAmount.toLocaleString('fr-FR')} {t('common.currency')}</span>
                                         </div>
                                         <div className="card-progress-bar">
                                             <div className="progress-fill" style={{ width: `${prog}%` }} />
                                         </div>
                                     </div>
-                                    <div className="card-footer">
-                                        <span>{c.denominations.length - c.checkedIndices.length} bulles restantes</span>
-                                        <span className="card-arrow">→</span>
+                                    <div className="card-footer" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                        <span>{c.denominations.length - c.checkedIndices.length} {t('couchonne.remainingBubbles')}</span>
+                                        <span className="card-arrow" style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }}>→</span>
                                     </div>
                                 </div>
                             );
@@ -264,7 +243,7 @@ export default function CouchonnePage() {
                         {couchonnes.length < 3 && (
                             <div className="add-card" onClick={() => setIsCreating(true)}>
                                 <div className="add-icon">+</div>
-                                <div className="add-text">Nouveau défi</div>
+                                <div className="add-text">{t('couchonne.newChallenge')}</div>
                             </div>
                         )}
                     </div>
@@ -272,7 +251,7 @@ export default function CouchonnePage() {
             ) : (
                 <div className="couchonne-detail">
                     <button className="back-btn" onClick={() => setActiveCouch(null)}>
-                        ← Retour aux défis
+                        {t('couchonne.backToChallenges')}
                     </button>
 
                     <div className="detail-header glass-card">
@@ -300,7 +279,7 @@ export default function CouchonnePage() {
                                             setRenamingValue(activeCouch.name);
                                             setIsRenaming(true);
                                         }}
-                                        title="Modifier le nom"
+                                        title={t('common.edit')}
                                     >
                                         ✏️
                                     </button>
@@ -309,23 +288,23 @@ export default function CouchonnePage() {
                         </div>
                         <div className="detail-stats">
                             <div className="stat-item">
-                                <span className="stat-label">Objectif</span>
-                                <div className="stat-value-container">
+                                <span className="stat-label">{t('couchonne.goal')}</span>
+                                <div className="stat-value-container" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                     <span className="stat-value">{activeCouch.targetAmount.toLocaleString('fr-FR')}</span>
-                                    <span className="stat-currency">{CURRENCY}</span>
+                                    <span className="stat-currency">{t('common.currency')}</span>
                                 </div>
                             </div>
                             <div className="stat-divider" />
                             <div className="stat-item">
-                                <span className="stat-label">Collecté</span>
-                                <div className="stat-value-container">
+                                <span className="stat-label">{t('couchonne.collected')}</span>
+                                <div className="stat-value-container" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                     <span className="stat-value positive">{currentTotal.toLocaleString('fr-FR')}</span>
-                                    <span className="stat-currency">{CURRENCY}</span>
+                                    <span className="stat-currency">{t('common.currency')}</span>
                                 </div>
                             </div>
                             <div className="stat-divider" />
                             <div className="stat-item">
-                                <span className="stat-label">Progression</span>
+                                <span className="stat-label">{t('couchonne.progression')}</span>
                                 <div className="stat-value-container">
                                     <span className="stat-value warning">{Math.floor(progress)}%</span>
                                 </div>
@@ -353,7 +332,6 @@ export default function CouchonnePage() {
                         })}
                     </div>
 
-                    {/* Effets de particules */}
                     {effects.map(eff => (
                         <div
                             key={eff.id}
@@ -368,7 +346,7 @@ export default function CouchonnePage() {
 
                     <div style={{ marginTop: '3rem', textAlign: 'center' }}>
                         <button className="btn btn-danger btn-sm" onClick={() => handleDelete(activeCouch.id)}>
-                            Abandonner le défi "{activeCouch.name}"
+                            {t('couchonne.abandonChallenge')} "{activeCouch.name}"
                         </button>
                     </div>
                 </div>
@@ -457,7 +435,7 @@ export default function CouchonnePage() {
                     transition: transform 0.3s ease;
                 }
                 .sublime-card:hover .card-arrow {
-                    transform: translateX(5px);
+                    transform: ${isRTL ? 'translateX(-5px) rotate(180deg)' : 'translateX(5px)'};
                     color: var(--accent-primary);
                 }
                 .add-card {
@@ -490,6 +468,8 @@ export default function CouchonnePage() {
                     font-size: 0.9rem;
                     margin-bottom: 1.5rem;
                     padding: 0;
+                    text-align: ${isRTL ? 'right' : 'left'};
+                    width: 100%;
                 }
                 .detail-header {
                     padding: 2rem;
@@ -628,7 +608,6 @@ export default function CouchonnePage() {
                     opacity: 0.3;
                 }
 
-                /* Particules */
                 .particle-container {
                     position: fixed;
                     pointer-events: none;

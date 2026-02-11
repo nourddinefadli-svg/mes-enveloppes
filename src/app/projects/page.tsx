@@ -5,13 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
 import { getProjects, addProject, updateProject, deleteProject, getTotalSavings, injectSavings, getManualInjection } from '@/services/firestore';
 import { Project } from '@/types/types';
-import { CURRENCY } from '@/lib/constants';
-
-const PRIORITY_LABELS: Record<Project['priority'], string> = {
-    high: 'Haute',
-    medium: 'Moyenne',
-    low: 'Basse'
-};
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const PRIORITY_COLORS: Record<Project['priority'], string> = {
     high: 'var(--danger)',
@@ -21,6 +15,7 @@ const PRIORITY_COLORS: Record<Project['priority'], string> = {
 
 export default function ProjectsPage() {
     const { user } = useAuth();
+    const { t, isRTL } = useLanguage();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +32,12 @@ export default function ProjectsPage() {
     const [priority, setPriority] = useState<Project['priority']>('medium');
     const [note, setNote] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
+    const PRIORITY_LABELS: Record<Project['priority'], string> = {
+        high: t('projects.priorityHigh'),
+        medium: t('projects.priorityMedium'),
+        low: t('projects.priorityLow')
+    };
 
     const loadProjects = useCallback(async () => {
         if (!user) return;
@@ -111,7 +112,8 @@ export default function ProjectsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!user || !confirm('Supprimer ce projet ?')) return;
+        const confirmMsg = isRTL ? 'هل تريد حذف هذا المشروع؟' : 'Supprimer ce projet ?';
+        if (!user || !confirm(confirmMsg)) return;
         try {
             await deleteProject(user.uid, id);
             loadProjects();
@@ -148,18 +150,15 @@ export default function ProjectsPage() {
     const totalBudget = realSavings + manualInjection;
 
     const sortedProjects = [...projects].sort((a, b) => {
-        // 1. Availability (Affordable first)
         const aAffordable = totalBudget >= a.amount;
         const bAffordable = totalBudget >= b.amount;
         if (aAffordable && !bAffordable) return -1;
         if (!aAffordable && bAffordable) return 1;
 
-        // 2. Date (Closest first)
         const aDate = a.date.toMillis();
         const bDate = b.date.toMillis();
         if (aDate !== bDate) return aDate - bDate;
 
-        // 3. Priority (High > Medium > Low)
         const priorityScore = { high: 3, medium: 2, low: 1 };
         return priorityScore[b.priority] - priorityScore[a.priority];
     });
@@ -170,12 +169,12 @@ export default function ProjectsPage() {
                 <div className="summary-grid" style={{ marginBottom: '2rem' }}>
                     <div className="glass-card summary-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                         <div>
-                            <div className="summary-label">Budget Disponible</div>
+                            <div className="summary-label">{t('projects.availableBudget')}</div>
                             <div className="summary-value positive">
-                                {totalBudget.toLocaleString('fr-FR')} {CURRENCY}
+                                {totalBudget.toLocaleString('fr-FR')} {t('common.currency')}
                             </div>
                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                Épargne ({realSavings}) + Apport ({manualInjection})
+                                {isRTL ? `ادخار (${realSavings}) + رصيد (${manualInjection})` : `Épargne (${realSavings}) + Apport (${manualInjection})`}
                             </div>
                         </div>
                         <button
@@ -183,7 +182,7 @@ export default function ProjectsPage() {
                             onClick={() => setIsInjectModalOpen(true)}
                             style={{ fontSize: '0.7rem' }}
                         >
-                            💉 {manualInjection > 0 ? 'Modifier Apport' : 'Injecter Apport'}
+                            💉 {manualInjection > 0 ? t('projects.modifyInjectionBtn') : t('projects.injectSavingsBtn')}
                         </button>
                     </div>
                 </div>
@@ -191,11 +190,11 @@ export default function ProjectsPage() {
 
             <div className="page-header" style={{ marginTop: '1rem' }}>
                 <div>
-                    <h1 className="page-title">Mes Projets</h1>
-                    <p className="page-subtitle">Dépenses futures et investissements</p>
+                    <h1 className="page-title">{t('projects.title')}</h1>
+                    <p className="page-subtitle">{isRTL ? 'نفقات مستقبلية واستثمارات' : 'Dépenses futures et investissements'}</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-                    🚀 Nouveau Projet
+                    {t('projects.newProjectBtn')}
                 </button>
             </div>
 
@@ -206,7 +205,7 @@ export default function ProjectsPage() {
             ) : sortedProjects.length === 0 ? (
                 <div className="empty-state">
                     <div className="empty-icon">🎯</div>
-                    <p className="empty-text">Aucun projet en vue. Planifiez votre prochain achat !</p>
+                    <p className="empty-text">{isRTL ? 'لا توجد مشاريع حاليا. خطط لعملية الشراء القادمة !' : 'Aucun projet en vue. Planifiez votre prochain achat !'}</p>
                 </div>
             ) : (
                 <div className="summary-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
@@ -218,34 +217,34 @@ export default function ProjectsPage() {
                                 className={`glass-card status-card project-card ${p.status === 'completed' ? 'exhausted' : ''} ${isAffordable ? 'is-affordable' : 'is-locked'}`}
                                 style={{ position: 'relative', overflow: 'hidden' }}
                             >
-                                {p.status === 'completed' && <div style={{ position: 'absolute', top: 10, right: 10, fontSize: '1.5rem' }}>✅</div>}
+                                {p.status === 'completed' && <div style={{ position: 'absolute', top: 10, right: isRTL ? 'auto' : 10, left: isRTL ? 10 : 'auto', fontSize: '1.5rem' }}>✅</div>}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                     <div>
                                         <span className="expense-category" style={{ backgroundColor: `${PRIORITY_COLORS[p.priority]}20`, color: PRIORITY_COLORS[p.priority], border: `1px solid ${PRIORITY_COLORS[p.priority]}40` }}>
                                             {PRIORITY_LABELS[p.priority]}
                                         </span>
-                                        <h3 style={{ fontSize: '1.25rem', marginTop: '0.5rem', opacity: p.status === 'completed' ? 0.6 : 1 }}>{p.title}</h3>
+                                        <h3 style={{ fontSize: '1.25rem', marginTop: '0.5rem', opacity: p.status === 'completed' ? 0.6 : 1, textAlign: isRTL ? 'right' : 'left' }}>{p.title}</h3>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div className="summary-value" style={{ fontSize: '1.4rem', color: p.status === 'completed' ? 'var(--text-muted)' : 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                    <div style={{ textAlign: isRTL ? 'left' : 'right' }}>
+                                        <div className="summary-value" style={{ fontSize: '1.4rem', color: p.status === 'completed' ? 'var(--text-muted)' : 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: isRTL ? 'flex-start' : 'flex-end', gap: '0.5rem', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                             <span className="padlock-icon">{isAffordable ? '🔓' : '🔒'}</span>
-                                            {p.amount.toLocaleString('fr-FR')} {CURRENCY}
+                                            {p.amount.toLocaleString('fr-FR')} {t('common.currency')}
                                         </div>
                                         <div className="expense-date">{p.date.toDate().toLocaleDateString('fr-FR')}</div>
                                     </div>
                                 </div>
 
-                                {p.note && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', fontStyle: 'italic' }}>"{p.note}"</p>}
+                                {p.note && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', fontStyle: 'italic', textAlign: isRTL ? 'right' : 'left' }}>"{p.note}"</p>}
 
-                                <div className="expense-actions" style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)', justifyContent: 'flex-end' }}>
+                                <div className="expense-actions" style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)', justifyContent: isRTL ? 'flex-start' : 'flex-end' }}>
                                     <button className="btn btn-secondary btn-sm" onClick={() => toggleStatus(p)}>
-                                        {p.status === 'completed' ? 'Réouvrir' : 'Terminer'}
+                                        {p.status === 'completed' ? (isRTL ? 'فتح' : 'Réouvrir') : (isRTL ? 'إكمال' : 'Terminer')}
                                     </button>
                                     <button className="btn btn-secondary btn-sm" onClick={() => handleOpenModal(p)}>
-                                        Modifier
+                                        {t('common.edit')}
                                     </button>
                                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p.id)}>
-                                        Suppr.
+                                        {isRTL ? 'حذف' : 'Suppr.'}
                                     </button>
                                 </div>
                             </div>
@@ -258,36 +257,36 @@ export default function ProjectsPage() {
                 <div className="modal-overlay">
                     <div className="glass-card modal-content">
                         <div className="modal-header">
-                            <h2 className="modal-title">{editingProject ? 'Modifier le Projet' : 'Nouveau Projet'}</h2>
+                            <h2 className="modal-title">{editingProject ? t('common.edit') : t('projects.newProject')}</h2>
                             <button className="btn-icon" onClick={() => setIsModalOpen(false)}>✕</button>
                         </div>
                         <form onSubmit={handleSave} className="auth-form">
                             <div className="form-group">
-                                <label className="form-label">Titre</label>
-                                <input className="form-input" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ex: Nouveau PC Gamer" required />
+                                <label className="form-label">{isRTL ? 'العنوان' : 'Titre'}</label>
+                                <input className="form-input" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="..." required />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Montant ({CURRENCY})</label>
+                                <label className="form-label">{t('projects.targetAmount')} ({t('common.currency')})</label>
                                 <input className="form-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Date cible</label>
+                                <label className="form-label">{t('projects.deadline')}</label>
                                 <input className="form-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Priorité</label>
+                                <label className="form-label">{t('projects.priority')}</label>
                                 <select className="form-select" value={priority} onChange={(e) => setPriority(e.target.value as any)}>
-                                    <option value="high">Haute priority</option>
-                                    <option value="medium">Moyenne</option>
-                                    <option value="low">Basse</option>
+                                    <option value="high">{t('projects.priorityHigh')}</option>
+                                    <option value="medium">{t('projects.priorityMedium')}</option>
+                                    <option value="low">{t('projects.priorityLow')}</option>
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Note (optionnel)</label>
-                                <textarea className="form-textarea" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Détails, liens, etc." rows={3} />
+                                <label className="form-label">{t('dashboard.note')}</label>
+                                <textarea className="form-textarea" value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." rows={3} />
                             </div>
                             <button className="btn btn-primary" type="submit" disabled={isSaving}>
-                                {isSaving ? 'Enregistrement...' : editingProject ? 'Mettre à jour' : 'Créer le Projet'}
+                                {isSaving ? t('common.loading') : editingProject ? t('common.edit') : t('common.add')}
                             </button>
                         </form>
                     </div>
@@ -298,12 +297,12 @@ export default function ProjectsPage() {
                 <div className="modal-overlay">
                     <div className="glass-card modal-content" style={{ maxWidth: '400px' }}>
                         <div className="modal-header">
-                            <h2 className="modal-title">Injecter Apport</h2>
+                            <h2 className="modal-title">{t('projects.injectSavingsBtn')}</h2>
                             <button className="btn-icon" onClick={() => setIsInjectModalOpen(false)}>✕</button>
                         </div>
                         <div className="auth-form">
                             <div className="form-group">
-                                <label className="form-label">Montant à injecter ({CURRENCY})</label>
+                                <label className="form-label">{t('projects.targetAmount')} ({t('common.currency')})</label>
                                 <input
                                     className="form-input"
                                     type="number"
@@ -312,11 +311,11 @@ export default function ProjectsPage() {
                                     placeholder="ex: 3000"
                                 />
                                 <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                                    Ce montant sera ajouté à votre épargne cumulée de manière permanente.
+                                    {isRTL ? 'سيتم إضافة هذا المبلغ إلى مدخراتك المتراكمة بشكل دائم.' : 'Ce montant sera ajouté à votre épargne cumulée de manière permanente.'}
                                 </p>
                             </div>
                             <button className="btn btn-primary" onClick={handleInject} disabled={isSaving}>
-                                {isSaving ? 'Injection...' : 'Confirmer l\'Injection'}
+                                {isSaving ? t('common.loading') : t('common.save')}
                             </button>
                         </div>
                     </div>

@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
 import { getExpenses, getMonths, deleteExpense, updateExpense } from '@/services/firestore';
-import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel } from '@/lib/constants';
+import { ENVELOPE_CLASSES, getCurrentMonthId } from '@/lib/constants';
 import { Expense } from '@/types/types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function HistoryPage() {
     const { user } = useAuth();
+    const { t, isRTL, formatMonth } = useLanguage();
     const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthId());
     const [availableMonths, setAvailableMonths] = useState<string[]>([]);
     const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -57,13 +59,13 @@ export default function HistoryPage() {
 
     const handleDelete = async (expenseId: string) => {
         if (!user) return;
-        if (!confirm('Supprimer cette dépense ?')) return;
+        if (!confirm(t('history.confirmDelete'))) return;
         try {
             await deleteExpense(user.uid, selectedMonth, expenseId);
-            showToast('Dépense supprimée.');
+            showToast(t('history.successDelete'));
             loadData();
         } catch {
-            showToast('Erreur de suppression.');
+            showToast(t('history.errorDelete'));
         }
     };
 
@@ -81,7 +83,7 @@ export default function HistoryPage() {
         if (!user || !editingExpense) return;
         const amountNum = parseFloat(editAmount);
         if (isNaN(amountNum) || amountNum <= 0) {
-            showToast('Montant invalide.');
+            showToast(t('common.error'));
             return;
         }
         setSaving(true);
@@ -92,18 +94,22 @@ export default function HistoryPage() {
                 envelopeName: editEnvelope,
                 date: new Date(editDate),
             });
-            showToast('Dépense modifiée.');
+            showToast(t('history.successUpdate'));
             setEditingExpense(null);
             loadData();
         } catch {
-            showToast('Erreur de modification.');
+            showToast(t('history.errorUpdate'));
         } finally {
             setSaving(false);
         }
     };
 
     const getEnvelopeInfo = (name: string) => {
-        return ENVELOPE_CLASSES.find((c) => c.id === name) || { label: name, icon: '📦' };
+        const cls = ENVELOPE_CLASSES.find((c) => c.id === name);
+        if (cls) {
+            return { label: t(`envelopes.${cls.id}` as any), icon: cls.icon };
+        }
+        return { label: name, icon: '📦' };
     };
 
     const formatDate = (timestamp: { toDate: () => Date }) => {
@@ -119,37 +125,39 @@ export default function HistoryPage() {
         <AppShell>
             <div className="page-header">
                 <div>
-                    <h1 className="page-title">Historique</h1>
+                    <h1 className="page-title">{t('history.title')}</h1>
                     <p className="page-subtitle">
-                        {expenses.length} dépense{expenses.length !== 1 ? 's' : ''} — {formatMonthLabel(selectedMonth)}
+                        {expenses.length} {t('history.expensesCount')} — {formatMonth(selectedMonth)}
                     </p>
                 </div>
             </div>
 
-            <div className="filter-bar">
+            <div className="filter-bar" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <select
                     className="form-select"
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    style={{ minWidth: '180px' }}
+                    style={{ minWidth: '180px', textAlign: isRTL ? 'right' : 'left' }}
                 >
                     {availableMonths.map((m) => (
-                        <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                        <option key={m} value={m}>{formatMonth(m)}</option>
                     ))}
                 </select>
                 <select
                     className="form-select"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    style={{ minWidth: '150px' }}
+                    style={{ minWidth: '150px', textAlign: isRTL ? 'right' : 'left' }}
                 >
-                    <option value="">Toutes les classes</option>
+                    <option value="">{t('history.allCategories')}</option>
                     {ENVELOPE_CLASSES.map((cls) => (
-                        <option key={cls.id} value={cls.id}>{cls.icon} {cls.label}</option>
+                        <option key={cls.id} value={cls.id}>
+                            {cls.icon} {t(`envelopes.${cls.id}` as any)}
+                        </option>
                     ))}
                 </select>
                 {!isCurrentMonth && (
-                    <span className="readonly-badge">🔒 Lecture seule</span>
+                    <span className="readonly-badge">🔒 {t('history.readOnly')}</span>
                 )}
             </div>
 
@@ -160,37 +168,37 @@ export default function HistoryPage() {
             ) : expenses.length === 0 ? (
                 <div className="empty-state">
                     <div className="empty-icon">📭</div>
-                    <p className="empty-text">Aucune dépense trouvée.</p>
+                    <p className="empty-text">{t('history.noExpenses')}</p>
                 </div>
             ) : (
                 <div className="expense-list">
                     {expenses.map((exp) => {
                         const info = getEnvelopeInfo(exp.envelopeName);
                         return (
-                            <div key={exp.id} className="glass-card expense-item">
-                                <div className="expense-info">
-                                    <div className="expense-category">
-                                        {info.icon} {info.label}
+                            <div key={exp.id} className="glass-card expense-item" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <div className="expense-info" style={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                    <div className="expense-category" style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: isRTL ? 'flex-start' : 'flex-start', gap: '8px' }}>
+                                        <span>{info.icon}</span> <span>{info.label}</span>
                                     </div>
                                     {exp.note && <div className="expense-note">{exp.note}</div>}
                                     <div className="expense-date">{formatDate(exp.date)}</div>
                                 </div>
-                                <div className="expense-amount">
-                                    -{exp.amount.toLocaleString('fr-FR')} {CURRENCY}
+                                <div className="expense-amount" style={{ direction: 'ltr' }}>
+                                    -{exp.amount.toLocaleString('fr-FR')} {t('common.currency')}
                                 </div>
                                 {isCurrentMonth && (
-                                    <div className="expense-actions">
+                                    <div className="expense-actions" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                         <button
                                             className="btn btn-secondary btn-icon"
                                             onClick={() => openEdit(exp)}
-                                            title="Modifier"
+                                            title={t('common.edit')}
                                         >
                                             ✏️
                                         </button>
                                         <button
                                             className="btn btn-danger btn-icon"
                                             onClick={() => handleDelete(exp.id)}
-                                            title="Supprimer"
+                                            title={t('common.delete')}
                                         >
                                             🗑️
                                         </button>
@@ -206,8 +214,8 @@ export default function HistoryPage() {
             {editingExpense && (
                 <div className="modal-overlay" onClick={() => setEditingExpense(null)}>
                     <div className="glass-card modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Modifier la dépense</h2>
+                        <div className="modal-header" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <h2 className="modal-title">{t('history.editTitle')}</h2>
                             <button
                                 className="btn btn-secondary btn-icon"
                                 onClick={() => setEditingExpense(null)}
@@ -217,31 +225,33 @@ export default function HistoryPage() {
                         </div>
                         <form className="auth-form" onSubmit={handleEditSubmit}>
                             <div className="form-group">
-                                <label className="form-label">📅 Date</label>
+                                <label className="form-label">📅 {t('history.date')}</label>
                                 <input
                                     className="form-input"
                                     type="date"
                                     value={editDate}
                                     onChange={(e) => setEditDate(e.target.value)}
                                     required
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">📂 Classe</label>
+                                <label className="form-label">📂 {t('history.category')}</label>
                                 <select
                                     className="form-select"
                                     value={editEnvelope}
                                     onChange={(e) => setEditEnvelope(e.target.value)}
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 >
                                     {ENVELOPE_CLASSES.map((cls) => (
                                         <option key={cls.id} value={cls.id}>
-                                            {cls.icon} {cls.label}
+                                            {cls.icon} {t(`envelopes.${cls.id}` as any)}
                                         </option>
                                     ))}
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label className="form-label">💵 Montant ({CURRENCY})</label>
+                                <label className="form-label">💵 {t('history.amount')} ({t('common.currency')})</label>
                                 <input
                                     className="form-input"
                                     type="number"
@@ -250,26 +260,28 @@ export default function HistoryPage() {
                                     value={editAmount}
                                     onChange={(e) => setEditAmount(e.target.value)}
                                     required
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">📝 Note</label>
+                                <label className="form-label">📝 {t('history.note')}</label>
                                 <input
                                     className="form-input"
                                     type="text"
                                     value={editNote}
                                     onChange={(e) => setEditNote(e.target.value)}
-                                    placeholder="Optionnelle"
+                                    placeholder={t('history.optional')}
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
-                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
                                     onClick={() => setEditingExpense(null)}
                                     style={{ flex: 1 }}
                                 >
-                                    Annuler
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -277,7 +289,7 @@ export default function HistoryPage() {
                                     disabled={saving}
                                     style={{ flex: 2 }}
                                 >
-                                    {saving ? '⏳' : '✓ Enregistrer'}
+                                    {saving ? '⏳' : `✓ ${t('common.save')}`}
                                 </button>
                             </div>
                         </form>

@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
 import { getMonths, getEnvelopes, getExpenses, getCumulativeEnvelopes, addExpense, getTotalSavings, updateEnvelopeName } from '@/services/firestore';
-import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, formatMonthLabel, SPIRITUAL_QUOTES } from '@/lib/constants';
+import { ENVELOPE_CLASSES, CURRENCY, getCurrentMonthId, SPIRITUAL_QUOTES } from '@/lib/constants';
 import { EnvelopeWithStats, Envelope, Expense } from '@/types/types';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 function getStatus(percentage: number): string {
     if (percentage <= 0) return 'exhausted';
@@ -18,6 +19,7 @@ function getStatus(percentage: number): string {
 export default function DashboardPage() {
     const { user, logout } = useAuth();
     const router = useRouter();
+    const { t, formatMonth, formatEnvelopeName, isRTL } = useLanguage();
     const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthId());
     const [availableMonths, setAvailableMonths] = useState<string[]>([]);
     const [envelopes, setEnvelopes] = useState<EnvelopeWithStats[]>([]);
@@ -90,7 +92,7 @@ export default function DashboardPage() {
                 return {
                     id: envelope?.id || cls.id,
                     name: cls.id,
-                    displayName: data?.displayName || cls.label,
+                    displayName: formatEnvelopeName(cls.id, data?.displayName),
                     initialAmount: initial,
                     spent,
                     carryOver,
@@ -99,10 +101,6 @@ export default function DashboardPage() {
                     adjustment
                 };
             });
-
-            // Sort by ENVELOPE_CLASSES order (already done by mapping ENVELOPE_CLASSES)
-            // const classOrder: string[] = ENVELOPE_CLASSES.map((c) => c.id);
-            // envelopeStats.sort((a, b) => classOrder.indexOf(a.name) - classOrder.indexOf(b.name));
 
             setEnvelopes(envelopeStats);
             // Load total savings (all months)
@@ -115,7 +113,7 @@ export default function DashboardPage() {
         } finally {
             setLoading(false);
         }
-    }, [user, selectedMonth, currentMonthId, router]);
+    }, [user, selectedMonth, currentMonthId, router, t]);
 
     useEffect(() => {
         loadData();
@@ -135,7 +133,8 @@ export default function DashboardPage() {
     const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     const diffTime = nextMonth.getTime() - today.getTime();
     const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const nextMonthLabel = formatMonthLabel(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`);
+    const nextMonthId = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`;
+    const nextMonthFormatted = formatMonth(nextMonthId);
 
     const getEnvelopeInfo = (name: string) => {
         return ENVELOPE_CLASSES.find((c) => c.id === name) || { label: name, icon: '📦' };
@@ -157,7 +156,7 @@ export default function DashboardPage() {
 
         const amountNum = parseFloat(quickAmount);
         if (isNaN(amountNum) || amountNum <= 0) {
-            showToast('Montant invalide.');
+            showToast(t('common.error'));
             return;
         }
 
@@ -169,13 +168,13 @@ export default function DashboardPage() {
                 date: new Date(quickDate),
                 note: quickNote.trim() || undefined,
             });
-            showToast('Dépense ajoutée !');
+            showToast(t('common.success'));
             setQuickAddEnvelope(null);
             setQuickAmount('');
             setQuickNote('');
             loadData();
         } catch {
-            showToast('Erreur lors de l\'ajout.');
+            showToast(t('common.error'));
         } finally {
             setQuickSaving(false);
         }
@@ -189,25 +188,26 @@ export default function DashboardPage() {
                 </div>
             )}
             <div className="page-header">
-                <div>
-                    <h1 className="page-title">Dashboard</h1>
-                    <p className="page-subtitle">{formatMonthLabel(selectedMonth)}</p>
+                <div style={{ textAlign: isRTL ? 'right' : 'left' }}>
+                    <h1 className="page-title">{t('dashboard.title')}</h1>
+                    <p className="page-subtitle">{formatMonth(selectedMonth)}</p>
                 </div>
-                <div className="month-selector">
+                <div className="month-selector" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <select
                         className="form-select"
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
+                        style={{ textAlign: isRTL ? 'right' : 'left' }}
                     >
                         {availableMonths.map((m) => (
-                            <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                            <option key={m} value={m}>{formatMonth(m)}</option>
                         ))}
                     </select>
                     {!isCurrentMonth && (
-                        <span className="readonly-badge">🔒 Lecture seule</span>
+                        <span className="readonly-badge">🔒 {t('history.readOnly')}</span>
                     )}
                     <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
-                        Déconnexion
+                        {t('common.logout')}
                     </button>
                 </div>
             </div>
@@ -219,41 +219,41 @@ export default function DashboardPage() {
             ) : envelopes.length === 0 ? (
                 <div className="empty-state">
                     <div className="empty-icon">📭</div>
-                    <p className="empty-text">Aucune enveloppe pour ce mois.</p>
+                    <p className="empty-text">{t('dashboard.noEnvelopes')}</p>
                 </div>
             ) : (
                 <>
                     {/* Summary Cards */}
                     <div className="summary-grid">
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Prochain Mois (restant)</div>
-                            <div className={`summary-value ${daysRemaining < 15 ? 'positive' : 'spending'}`}>
-                                {daysRemaining} Jours
+                        <div className="glass-card summary-card" style={{ textAlign: isRTL ? 'right' : 'left' }}>
+                            <div className="summary-label">{t('dashboard.nextMonth')}</div>
+                            <div className={`summary-value ${daysRemaining < 15 ? 'positive' : 'spending'}`} style={{ direction: 'ltr' }}>
+                                {daysRemaining.toLocaleString('fr-FR')} {t('dashboard.daysRemaining')}
                             </div>
                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                Avant le 1er {nextMonthLabel}
+                                {t('dashboard.beforeFirst')} {nextMonthFormatted}
                             </div>
                         </div>
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Total d'Épargne</div>
-                            <div className="summary-value positive">
-                                {totalSavings.real.toLocaleString('fr-FR')} {CURRENCY}
+                        <div className="glass-card summary-card" style={{ textAlign: isRTL ? 'right' : 'left' }}>
+                            <div className="summary-label">{t('dashboard.totalSavings')}</div>
+                            <div className="summary-value positive" style={{ direction: 'ltr' }}>
+                                {totalSavings.real.toLocaleString('fr-FR')} {t('common.currency')}
                             </div>
                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
                                 {isCurrentMonth ? (
-                                    <>Potentiel ce mois : <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>{totalSavings.potential.toLocaleString('fr-FR')} {CURRENCY}</span></>
+                                    <>{t('dashboard.potentialSavings')} : <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold', direction: 'ltr', display: 'inline-block' }}>{totalSavings.potential.toLocaleString('fr-FR')} {t('common.currency')}</span></>
                                 ) : (
-                                    "Cumul des mois écoulés"
+                                    t('dashboard.pastMonthsCumul')
                                 )}
                             </div>
                         </div>
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Total Dépensé</div>
-                            <div className="summary-value spending">{totalSpent.toLocaleString('fr-FR')} {CURRENCY}</div>
+                        <div className="glass-card summary-card" style={{ textAlign: isRTL ? 'right' : 'left' }}>
+                            <div className="summary-label">{t('dashboard.totalSpent')}</div>
+                            <div className="summary-value spending" style={{ direction: 'ltr' }}>{totalSpent.toLocaleString('fr-FR')} {t('common.currency')}</div>
                         </div>
-                        <div className="glass-card summary-card">
-                            <div className="summary-label">Total Restant</div>
-                            <div className="summary-value remaining">{totalRemaining.toLocaleString('fr-FR')} {CURRENCY}</div>
+                        <div className="glass-card summary-card" style={{ textAlign: isRTL ? 'right' : 'left' }}>
+                            <div className="summary-label">{t('dashboard.totalRemaining')}</div>
+                            <div className="summary-value remaining" style={{ direction: 'ltr' }}>{totalRemaining.toLocaleString('fr-FR')} {t('common.currency')}</div>
                         </div>
                     </div>
 
@@ -267,36 +267,41 @@ export default function DashboardPage() {
                                     key={env.id}
                                     className={`glass-card envelope-card status-${status} clickable`}
                                     onClick={() => isCurrentMonth && setQuickAddEnvelope(env.name)}
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 >
-                                    <div className="envelope-header">
-                                        <div className="envelope-name">
+                                    <div className="envelope-header" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                        <div className="envelope-name" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                             <span className="envelope-icon">{info.icon}</span>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontWeight: 700 }}>{env.displayName || info.label}</span>
-                                                <span style={{ fontSize: '0.65rem', opacity: 0.5, textTransform: 'uppercase' }}>{info.label}</span>
+                                                <span style={{ fontWeight: 700 }}>{env.displayName}</span>
+                                                <span style={{ fontSize: '0.65rem', opacity: 0.5, textTransform: 'uppercase' }}>{t(`envelopes.${env.name}` as any)}</span>
                                             </div>
                                         </div>
-                                        <span className={`envelope-percentage ${status}`}>
-                                            {env.percentage}% <span style={{ fontSize: '0.7rem', fontWeight: 500, opacity: 0.7 }}>restant</span>
+                                        <span className={`envelope-percentage ${status}`} style={{ direction: 'ltr' }}>
+                                            {env.percentage.toLocaleString('fr-FR')}% <span style={{ fontSize: '0.7rem', fontWeight: 500, opacity: 0.7 }}>{t('dashboard.remaining')}</span>
                                         </span>
                                     </div>
-                                    <div className={`envelope-remaining ${env.remaining < 0 ? 'negative' : ''}`}>
-                                        {env.remaining.toLocaleString('fr-FR')} {CURRENCY}
+                                    <div className={`envelope-remaining ${env.remaining < 0 ? 'negative' : ''}`} style={{ direction: 'ltr' }}>
+                                        {env.remaining.toLocaleString('fr-FR')} {t('common.currency')}
                                     </div>
-                                    <div className="envelope-details">
+                                    <div className="envelope-details" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                         {env.carryOver !== 0 && (
-                                            <span style={{ color: env.carryOver > 0 ? '#4ade80' : '#f87171', marginRight: '0.5rem' }}>
-                                                {env.carryOver > 0 ? '+' : ''}{env.carryOver.toLocaleString('fr-FR')} (Report)
+                                            <span style={{ color: env.carryOver > 0 ? '#4ade80' : '#f87171', direction: 'ltr' }}>
+                                                {env.carryOver > 0 ? '+' : ''}{env.carryOver.toLocaleString('fr-FR')} ({t('dashboard.carryOver')})
                                             </span>
                                         )}
                                         {env.spent > 0 && (
-                                            <span style={{ color: 'var(--danger)' }}>Dépensé: {env.spent.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                            <span style={{ color: 'var(--danger)', direction: 'ltr' }}>{t('dashboard.spent')}: {env.spent.toLocaleString('fr-FR')} {t('common.currency')}</span>
                                         )}
                                     </div>
                                     <div className="progress-bar">
                                         <div
                                             className={`progress-fill ${status}`}
-                                            style={{ width: `${Math.max(0, env.percentage)}%` }}
+                                            style={{
+                                                width: `${Math.max(0, env.percentage)}%`,
+                                                right: isRTL ? 0 : 'auto',
+                                                left: isRTL ? 'auto' : 0
+                                            }}
                                         />
                                     </div>
                                 </div>
@@ -310,9 +315,9 @@ export default function DashboardPage() {
             {quickAddEnvelope && (
                 <div className="modal-overlay" onClick={() => setQuickAddEnvelope(null)}>
                     <div className="glass-card modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
+                        <div className="modal-header" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                             <h2 className="modal-title">
-                                {getEnvelopeInfo(quickAddEnvelope).icon} {getEnvelopeInfo(quickAddEnvelope).label}
+                                {getEnvelopeInfo(quickAddEnvelope).icon} {envelopes.find(e => e.name === quickAddEnvelope)?.displayName || t(`envelopes.${quickAddEnvelope}` as any)}
                             </h2>
                             <button
                                 className="btn btn-secondary btn-icon"
@@ -321,20 +326,21 @@ export default function DashboardPage() {
                                 ✕
                             </button>
                         </div>
-                        <p style={{ opacity: 0.7, marginBottom: '1rem', fontSize: '0.9rem' }}>Ajouter une dépense rapide</p>
+                        <p style={{ opacity: 0.7, marginBottom: '1rem', fontSize: '0.9rem', textAlign: isRTL ? 'right' : 'left' }}>{t('dashboard.quickAdd')}</p>
                         <form className="auth-form" onSubmit={handleQuickAdd}>
                             <div className="form-group">
-                                <label className="form-label">📅 Date</label>
+                                <label className="form-label" style={{ textAlign: isRTL ? 'right' : 'left', display: 'block' }}>📅 {t('dashboard.date')}</label>
                                 <input
                                     className="form-input"
                                     type="date"
                                     value={quickDate}
                                     onChange={(e) => setQuickDate(e.target.value)}
                                     required
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">💵 Montant ({CURRENCY})</label>
+                                <label className="form-label" style={{ textAlign: isRTL ? 'right' : 'left', display: 'block' }}>💵 {t('dashboard.amount')} ({t('common.currency')})</label>
                                 <input
                                     className="form-input"
                                     type="number"
@@ -345,26 +351,28 @@ export default function DashboardPage() {
                                     placeholder="0.00"
                                     required
                                     autoFocus
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">📝 Note (optionnelle)</label>
+                                <label className="form-label" style={{ textAlign: isRTL ? 'right' : 'left', display: 'block' }}>📝 {t('dashboard.note')}</label>
                                 <input
                                     className="form-input"
                                     type="text"
                                     value={quickNote}
                                     onChange={(e) => setQuickNote(e.target.value)}
-                                    placeholder="Ex: Baguette..."
+                                    placeholder={t('dashboard.note')}
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
-                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
                                     onClick={() => setQuickAddEnvelope(null)}
                                     style={{ flex: 1 }}
                                 >
-                                    Annuler
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -372,7 +380,7 @@ export default function DashboardPage() {
                                     disabled={quickSaving}
                                     style={{ flex: 2 }}
                                 >
-                                    {quickSaving ? '⏳' : '✓ Ajouter'}
+                                    {quickSaving ? '⏳' : `✓ ${t('common.add')}`}
                                 </button>
                             </div>
                         </form>

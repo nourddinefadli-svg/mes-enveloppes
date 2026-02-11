@@ -2,18 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const navItems = [
-    { href: '/dashboard', icon: '📊', label: 'Dashboard' },
-    { href: '/add-expense', icon: '➕', label: 'Dépense' },
-    { href: '/history', icon: '📋', label: 'Historique' },
-    { href: '/projects', icon: '🚀', label: 'Projets' },
-    { href: '/couchonne', icon: '🐷', label: 'Couchonne' },
-    { href: '/init-month', icon: '📅', label: 'Mois' },
-];
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Navigation() {
     const pathname = usePathname();
+    const { t } = useLanguage();
+
+    const navItems = [
+        { href: '/dashboard', icon: '📊', label: t('nav.dashboard') },
+        { href: '/add-expense', icon: '➕', label: t('nav.expense') },
+        { href: '/history', icon: '📋', label: t('nav.history') },
+        { href: '/projects', icon: '🚀', label: t('nav.projects') },
+        { href: '/couchonne', icon: '🐷', label: t('nav.couchonne') },
+        { href: '/init-month', icon: '📅', label: t('nav.month') },
+    ];
 
     return (
         <nav className="bottom-nav">

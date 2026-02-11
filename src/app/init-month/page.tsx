@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
 import { initializeEnvelopes, getEnvelopes, getEnvelopesForPreviousMonth } from '@/services/firestore';
-import { ENVELOPE_CLASSES, EnvelopeClassId, CURRENCY, getCurrentMonthId, formatMonthLabel } from '@/lib/constants';
+import { ENVELOPE_CLASSES, EnvelopeClassId, getCurrentMonthId } from '@/lib/constants';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function InitMonthPage() {
     const { user } = useAuth();
     const router = useRouter();
+    const { t, isRTL, formatMonth, formatEnvelopeName } = useLanguage();
     const monthId = getCurrentMonthId();
 
     const [amounts, setAmounts] = useState<Record<string, number>>({});
@@ -29,24 +31,23 @@ export default function InitMonthPage() {
                 const existingNames: Record<string, string> = {};
                 for (const env of envs) {
                     existingAmounts[env.name] = env.initialAmount;
-                    existingNames[env.name] = env.displayName || ENVELOPE_CLASSES.find(c => c.id === env.name)?.label || env.name;
+                    existingNames[env.name] = formatEnvelopeName(env.name, env.displayName);
                 }
                 setAmounts(existingAmounts);
                 setDisplayNames(existingNames);
             } else {
-                // Default all to 0 and default labels
                 const defaultAmounts: Record<string, number> = {};
                 const defaultNames: Record<string, string> = {};
                 for (const cls of ENVELOPE_CLASSES) {
                     defaultAmounts[cls.id] = 0;
-                    defaultNames[cls.id] = cls.label;
+                    defaultNames[cls.id] = formatEnvelopeName(cls.id);
                 }
                 setAmounts(defaultAmounts);
                 setDisplayNames(defaultNames);
             }
         }
-        checkExisting();
-    }, [user, monthId]);
+        if (user) checkExisting();
+    }, [user, monthId, formatEnvelopeName]);
 
     const handleChange = (id: string, value: string) => {
         const num = parseFloat(value) || 0;
@@ -65,12 +66,12 @@ export default function InitMonthPage() {
             if (prev) {
                 setAmounts(prev.amounts);
                 setDisplayNames(prev.displayNames);
-                showToast('Données du mois précédent chargées !');
+                showToast(t('initMonth.successLoad'));
             } else {
-                showToast('Aucun mois précédent trouvé.');
+                showToast(t('initMonth.noPrevious'));
             }
         } catch {
-            showToast('Erreur de chargement.');
+            showToast(t('initMonth.loadError'));
         } finally {
             setLoadingPrev(false);
         }
@@ -87,12 +88,12 @@ export default function InitMonthPage() {
                 amounts as Record<EnvelopeClassId, number>,
                 displayNames
             );
-            showToast('Mois initialisé avec succès !');
+            showToast(t('initMonth.successInit'));
             setTimeout(() => router.push('/dashboard'), 1000);
         } catch (err) {
             console.error('Init error:', err);
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue';
-            showToast(`Erreur: ${msg}`);
+            const msg = err instanceof Error ? err.message : 'Error';
+            showToast(`${t('initMonth.errorPrefix')} ${msg}`);
         } finally {
             setLoading(false);
         }
@@ -110,16 +111,16 @@ export default function InitMonthPage() {
             <div className="page-header">
                 <div>
                     <h1 className="page-title">
-                        {alreadyInit ? 'Modifier le mois' : 'Initialiser le mois'}
+                        {alreadyInit ? t('initMonth.titleEdit') : t('initMonth.titleInit')}
                     </h1>
-                    <p className="page-subtitle">{formatMonthLabel(monthId)}</p>
+                    <p className="page-subtitle">{formatMonth(monthId)}</p>
                 </div>
                 <button
                     className="btn btn-secondary"
                     onClick={handleLoadPrevious}
                     disabled={loadingPrev}
                 >
-                    {loadingPrev ? '⏳' : '📋'} Reprendre mois précédent
+                    {loadingPrev ? '⏳' : '📋'} {t('initMonth.loadPrev')}
                 </button>
             </div>
 
@@ -134,7 +135,8 @@ export default function InitMonthPage() {
                                     type="text"
                                     value={displayNames[cls.id] || ''}
                                     onChange={(e) => handleNameChange(cls.id, e.target.value)}
-                                    placeholder={cls.label}
+                                    placeholder={t(`envelopes.${cls.id}` as any)}
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                                 <input
                                     className="form-input"
@@ -143,7 +145,8 @@ export default function InitMonthPage() {
                                     step="0.01"
                                     value={amounts[cls.id] || ''}
                                     onChange={(e) => handleChange(cls.id, e.target.value)}
-                                    placeholder={`Montant en ${CURRENCY}`}
+                                    placeholder={t('initMonth.amountPlaceholder')}
+                                    style={{ textAlign: isRTL ? 'right' : 'left' }}
                                 />
                             </div>
                         </div>
@@ -152,10 +155,10 @@ export default function InitMonthPage() {
 
                 <div className="glass-card" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                        TOTAL BUDGET
+                        {t('initMonth.totalBudget')}
                     </div>
                     <div style={{ fontSize: '2rem', fontWeight: 800, background: 'var(--accent-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                        {total.toLocaleString('fr-FR')} {CURRENCY}
+                        {total.toLocaleString('fr-FR')} {t('common.currency')}
                     </div>
                 </div>
 
@@ -165,7 +168,7 @@ export default function InitMonthPage() {
                     disabled={loading}
                     style={{ width: '100%', padding: '1rem' }}
                 >
-                    {loading ? '⏳ Enregistrement...' : '✓ Valider les enveloppes'}
+                    {loading ? `⏳ ${t('initMonth.saving')}` : `✓ ${t('initMonth.validate')}`}
                 </button>
             </form>
 
