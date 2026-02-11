@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AppShell from '@/components/AppShell';
-import { getProjects, addProject, updateProject, deleteProject, getTotalSavings } from '@/services/firestore';
+import { getProjects, addProject, updateProject, deleteProject, getTotalSavings, injectSavings, getManualInjection } from '@/services/firestore';
 import { Project } from '@/types/types';
 import { CURRENCY } from '@/lib/constants';
 
@@ -24,8 +24,11 @@ export default function ProjectsPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isInjectModalOpen, setIsInjectModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<Project | null>(null);
     const [realSavings, setRealSavings] = useState(0);
+    const [manualInjection, setManualInjection] = useState(0);
+    const [injectAmount, setInjectAmount] = useState('3000');
 
     // Form state
     const [title, setTitle] = useState('');
@@ -39,12 +42,14 @@ export default function ProjectsPage() {
         if (!user) return;
         setLoading(true);
         try {
-            const [data, savings] = await Promise.all([
+            const [data, savings, injection] = await Promise.all([
                 getProjects(user.uid),
-                getTotalSavings(user.uid)
+                getTotalSavings(user.uid),
+                getManualInjection(user.uid)
             ]);
             setProjects(data);
             setRealSavings(savings.real);
+            setManualInjection(injection);
         } catch (error) {
             console.error('Error loading projects:', error);
         } finally {
@@ -114,6 +119,20 @@ export default function ProjectsPage() {
         }
     };
 
+    const handleInject = async () => {
+        if (!user || !injectAmount) return;
+        setIsSaving(true);
+        try {
+            await injectSavings(user.uid, parseFloat(injectAmount));
+            setIsInjectModalOpen(false);
+            loadProjects();
+        } catch (error) {
+            console.error('Error injecting savings:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const toggleStatus = async (p: Project) => {
         if (!user) return;
         const newStatus = p.status === 'completed' ? 'pending' : 'completed';
@@ -125,10 +144,12 @@ export default function ProjectsPage() {
         }
     };
 
+    const totalBudget = realSavings + manualInjection;
+
     const sortedProjects = [...projects].sort((a, b) => {
         // 1. Availability (Affordable first)
-        const aAffordable = realSavings >= a.amount;
-        const bAffordable = realSavings >= b.amount;
+        const aAffordable = totalBudget >= a.amount;
+        const bAffordable = totalBudget >= b.amount;
         if (aAffordable && !bAffordable) return -1;
         if (!aAffordable && bAffordable) return 1;
 
@@ -146,14 +167,21 @@ export default function ProjectsPage() {
         <AppShell>
             <div className="sticky-mobile-summary">
                 <div className="summary-grid" style={{ marginBottom: '2rem' }}>
-                    <div className="glass-card summary-card">
+                    <div className="glass-card summary-card" style={{ position: 'relative' }}>
                         <div className="summary-label">Budget Disponible</div>
                         <div className="summary-value positive">
-                            {realSavings.toLocaleString('fr-FR')} {CURRENCY}
+                            {totalBudget.toLocaleString('fr-FR')} {CURRENCY}
                         </div>
                         <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                            Épargne réelle cumulée
+                            Épargne ({realSavings}) + Apport ({manualInjection})
                         </div>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setIsInjectModalOpen(true)}
+                            style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '0.7rem' }}
+                        >
+                            💉 Injecter
+                        </button>
                     </div>
                 </div>
             </div>
@@ -180,7 +208,7 @@ export default function ProjectsPage() {
             ) : (
                 <div className="summary-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
                     {sortedProjects.map((p) => {
-                        const isAffordable = realSavings >= p.amount;
+                        const isAffordable = totalBudget >= p.amount;
                         return (
                             <div
                                 key={p.id}
@@ -259,6 +287,35 @@ export default function ProjectsPage() {
                                 {isSaving ? 'Enregistrement...' : editingProject ? 'Mettre à jour' : 'Créer le Projet'}
                             </button>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {isInjectModalOpen && (
+                <div className="modal-overlay">
+                    <div className="glass-card modal-content" style={{ maxWidth: '400px' }}>
+                        <div className="modal-header">
+                            <h2 className="modal-title">Injecter Apport</h2>
+                            <button className="btn-icon" onClick={() => setIsInjectModalOpen(false)}>✕</button>
+                        </div>
+                        <div className="auth-form">
+                            <div className="form-group">
+                                <label className="form-label">Montant à injecter ({CURRENCY})</label>
+                                <input
+                                    className="form-input"
+                                    type="number"
+                                    value={injectAmount}
+                                    onChange={(e) => setInjectAmount(e.target.value)}
+                                    placeholder="ex: 3000"
+                                />
+                                <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                                    Ce montant sera ajouté à votre épargne cumulée de manière permanente.
+                                </p>
+                            </div>
+                            <button className="btn btn-primary" onClick={handleInject} disabled={isSaving}>
+                                {isSaving ? 'Injection...' : 'Confirmer l\'Injection'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

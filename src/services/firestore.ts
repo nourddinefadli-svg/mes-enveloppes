@@ -39,7 +39,9 @@ export async function getMonths(uid: string): Promise<Month[]> {
     const monthsRef = collection(getDbInstance(), 'users', uid, 'months');
     const q = query(monthsRef, orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Month));
+    return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Month))
+        .filter(m => m.id !== '0000-00');
 }
 
 // ===================== ENVELOPES =====================
@@ -157,7 +159,7 @@ export async function getCumulativeEnvelopes(
     const monthsSnap = await getDocs(query(monthsRef, orderBy('createdAt', 'asc')));
     const monthIds = monthsSnap.docs
         .map((d) => d.id)
-        .filter((id) => id <= targetMonthId);
+        .filter((id) => id <= targetMonthId && id !== '0000-00');
 
     const cumulative: Record<string, { initial: number; spent: number; carryOver: number; adjustment: number }> = {};
     for (const cls of ENVELOPE_CLASSES) {
@@ -227,7 +229,9 @@ export async function getTotalSavings(uid: string): Promise<{ real: number; pote
 
     if (monthsSnap.empty) return { real: 0, potential: 0 };
 
-    const monthIds = monthsSnap.docs.map((d) => d.id);
+    const monthIds = monthsSnap.docs
+        .map((d) => d.id)
+        .filter(id => id !== '0000-00'); // Exclure le mois fictif si existant
     const now = new Date();
     const currentMonthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -320,4 +324,32 @@ export async function updateProject(
 export async function deleteProject(uid: string, projectId: string): Promise<void> {
     const projectRef = doc(getDbInstance(), 'users', uid, 'projects', projectId);
     await deleteDoc(projectRef);
+}
+
+/**
+ * Injecte un montant manuel spécifique aux projets (apport).
+ * Ce montant est stocké séparément de l'épargne mensuelle.
+ */
+export async function injectSavings(uid: string, amount: number): Promise<void> {
+    const settingsRef = doc(getDbInstance(), 'users', uid, 'metadata', 'projects');
+    await setDoc(settingsRef, {
+        manualInjection: amount,
+        updatedAt: Timestamp.now()
+    }, { merge: true });
+
+    // Nettoyage de l'ancien mois fictif s'il existe
+    const oldMonthRef = doc(getDbInstance(), 'users', uid, 'months', '0000-00');
+    await deleteDoc(oldMonthRef);
+}
+
+/**
+ * Récupère le montant injecté manuellement pour les projets.
+ */
+export async function getManualInjection(uid: string): Promise<number> {
+    const settingsRef = doc(getDbInstance(), 'users', uid, 'metadata', 'projects');
+    const snap = await getDoc(settingsRef);
+    if (snap.exists()) {
+        return snap.data().manualInjection || 0;
+    }
+    return 0;
 }
