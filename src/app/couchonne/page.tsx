@@ -22,6 +22,10 @@ export default function CouchonnePage() {
     const [couchonneName, setCouchonneName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
+    // Renaming state
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renamingValue, setRenamingValue] = useState('');
+
     const loadData = useCallback(async () => {
         if (!user) return;
         setLoading(true);
@@ -109,6 +113,22 @@ export default function CouchonnePage() {
         setTimeout(() => {
             setEffects(prev => prev.filter(eff => eff.id !== id));
         }, 800);
+    };
+
+    const handleRename = async () => {
+        if (!user || !activeCouch || !renamingValue.trim()) return;
+        setIsSaving(true);
+        try {
+            const updated = { ...activeCouch, name: renamingValue.trim() };
+            await saveCouchonne(user.uid, updated);
+            setActiveCouch(updated);
+            setCouchonnes(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setIsRenaming(false);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const toggleBubble = async (e: React.MouseEvent, index: number) => {
@@ -252,7 +272,37 @@ export default function CouchonnePage() {
                     </button>
 
                     <div className="detail-header glass-card">
-                        <h2 className="detail-title">{activeCouch.name}</h2>
+                        <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                            {isRenaming ? (
+                                <div className="rename-form">
+                                    <input
+                                        className="form-input"
+                                        value={renamingValue}
+                                        onChange={(e) => setRenamingValue(e.target.value)}
+                                        autoFocus
+                                        onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+                                    />
+                                    <div className="rename-actions">
+                                        <button className="btn btn-primary btn-sm" onClick={handleRename}>✓</button>
+                                        <button className="btn btn-secondary btn-sm" onClick={() => setIsRenaming(false)}>✕</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <h2 className="detail-title" style={{ marginBottom: 0 }}>
+                                    {activeCouch.name}
+                                    <button
+                                        className="edit-btn"
+                                        onClick={() => {
+                                            setRenamingValue(activeCouch.name);
+                                            setIsRenaming(true);
+                                        }}
+                                        title="Modifier le nom"
+                                    >
+                                        ✏️
+                                    </button>
+                                </h2>
+                            )}
+                        </div>
                         <div className="detail-stats">
                             <div className="stat-item">
                                 <span className="stat-label">Objectif</span>
@@ -443,8 +493,40 @@ export default function CouchonnePage() {
                 }
                 .detail-title {
                     font-size: 1.8rem;
-                    margin-bottom: 1.5rem;
                     text-align: center;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 1rem;
+                }
+                .edit-btn {
+                    background: none;
+                    border: none;
+                    font-size: 1.1rem;
+                    cursor: pointer;
+                    opacity: 0.4;
+                    transition: opacity 0.2s;
+                    padding: 4px;
+                }
+                .edit-btn:hover {
+                    opacity: 1;
+                }
+                .rename-form {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 0.8rem;
+                }
+                .rename-actions {
+                    display: flex;
+                    gap: 0.5rem;
+                }
+                .rename-form .form-input {
+                    text-align: center;
+                    font-size: 1.4rem;
+                    font-weight: 700;
+                    background: rgba(255,255,255,0.05);
+                    border-bottom: 2px solid var(--accent-primary);
                 }
                 .detail-stats {
                     display: flex;
