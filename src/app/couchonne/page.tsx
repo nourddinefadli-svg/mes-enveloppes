@@ -222,8 +222,9 @@ export default function CouchonnePage() {
                                         <span className="card-percent">{Math.floor(prog)}%</span>
                                     </div>
                                     <div className="card-main">
-                                        <div className="card-amount">
-                                            {total.toLocaleString('fr-FR')} / {c.targetAmount.toLocaleString('fr-FR')} {CURRENCY}
+                                        <div className="card-amount" style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                                            <span style={{ fontSize: '1.2rem', fontWeight: 800 }}>{total.toLocaleString('fr-FR')}</span>
+                                            <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>/ {c.targetAmount.toLocaleString('fr-FR')} {CURRENCY}</span>
                                         </div>
                                         <div className="card-progress-bar">
                                             <div className="progress-fill" style={{ width: `${prog}%` }} />
@@ -255,17 +256,25 @@ export default function CouchonnePage() {
                         <div className="detail-stats">
                             <div className="stat-item">
                                 <span className="stat-label">Objectif</span>
-                                <span className="stat-value">{activeCouch.targetAmount.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                <div className="stat-value-container">
+                                    <span className="stat-value">{activeCouch.targetAmount.toLocaleString('fr-FR')}</span>
+                                    <span className="stat-currency">{CURRENCY}</span>
+                                </div>
                             </div>
                             <div className="stat-divider" />
                             <div className="stat-item">
                                 <span className="stat-label">Collecté</span>
-                                <span className="stat-value positive">{currentTotal.toLocaleString('fr-FR')} {CURRENCY}</span>
+                                <div className="stat-value-container">
+                                    <span className="stat-value positive">{currentTotal.toLocaleString('fr-FR')}</span>
+                                    <span className="stat-currency">{CURRENCY}</span>
+                                </div>
                             </div>
                             <div className="stat-divider" />
                             <div className="stat-item">
                                 <span className="stat-label">Progression</span>
-                                <span className="stat-value warning">{Math.floor(progress)}%</span>
+                                <div className="stat-value-container">
+                                    <span className="stat-value warning">{Math.floor(progress)}%</span>
+                                </div>
                             </div>
                         </div>
                         <div className="detail-progress-wrapper">
@@ -455,8 +464,19 @@ export default function CouchonnePage() {
                     margin-bottom: 0.4rem;
                 }
                 .stat-value {
-                    font-size: 1.2rem;
-                    font-weight: 700;
+                    font-size: 1.4rem;
+                    font-weight: 800;
+                    line-height: 1;
+                }
+                .stat-value-container {
+                    display: flex;
+                    align-items: baseline;
+                    gap: 4px;
+                }
+                .stat-currency {
+                    font-size: 0.8rem;
+                    opacity: 0.6;
+                    font-weight: 600;
                 }
                 .stat-divider {
                     width: 1px;
@@ -560,18 +580,36 @@ export default function CouchonnePage() {
                     }
                 }
                 .major .particle {
-                    width: 8px;
-                    height: 8px;
-                    background: var(--warning);
-                    box-shadow: 0 0 10px var(--warning);
+                    width: 10px;
+                    height: 10px;
+                    background: #fbbf24;
+                    box-shadow: 0 0 15px #fbbf24, 0 0 30px rgba(251, 191, 36, 0.4);
                     animation-name: particle-burst-major;
+                    animation-duration: 0.8s;
                 }
                 .minor .particle {
                     width: 6px;
                     height: 6px;
-                    background: var(--success);
+                    background: #34d399;
+                    box-shadow: 0 0 10px #34d399;
                     animation-name: particle-burst-minor;
-                    animation-duration: 0.4s;
+                    animation-duration: 0.5s;
+                }
+                @media (max-width: 600px) {
+                    .detail-stats {
+                        gap: 1rem;
+                        flex-wrap: wrap;
+                    }
+                    .stat-divider {
+                        display: none;
+                    }
+                    .stat-item {
+                        background: rgba(255,255,255,0.03);
+                        padding: 0.8rem;
+                        border-radius: 12px;
+                        flex: 1;
+                        min-width: 100px;
+                    }
                 }
                 @media (max-width: 480px) {
                     .bubble-grid {
@@ -580,6 +618,9 @@ export default function CouchonnePage() {
                     }
                     .bubble {
                         font-size: 0.8rem;
+                    }
+                    .detail-title {
+                        font-size: 1.4rem;
                     }
                 }
             `}</style>
