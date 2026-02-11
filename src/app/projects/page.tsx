@@ -168,18 +168,20 @@ export default function ProjectsPage() {
         <AppShell>
             <div className="sticky-mobile-summary">
                 <div className="summary-grid" style={{ marginBottom: '2rem' }}>
-                    <div className="glass-card summary-card" style={{ position: 'relative' }}>
-                        <div className="summary-label">Budget Disponible</div>
-                        <div className="summary-value positive">
-                            {totalBudget.toLocaleString('fr-FR')} {CURRENCY}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                            Épargne ({realSavings}) + Apport ({manualInjection})
+                    <div className="glass-card summary-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div>
+                            <div className="summary-label">Budget Disponible</div>
+                            <div className="summary-value positive">
+                                {totalBudget.toLocaleString('fr-FR')} {CURRENCY}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                Épargne ({realSavings}) + Apport ({manualInjection})
+                            </div>
                         </div>
                         <button
                             className="btn btn-secondary btn-sm"
                             onClick={() => setIsInjectModalOpen(true)}
-                            style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '0.7rem' }}
+                            style={{ fontSize: '0.7rem' }}
                         >
                             💉 {manualInjection > 0 ? 'Modifier Apport' : 'Injecter Apport'}
                         </button>

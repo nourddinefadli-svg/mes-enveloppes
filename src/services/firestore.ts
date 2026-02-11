@@ -15,7 +15,7 @@ import {
     limit,
 } from 'firebase/firestore';
 import { getDbInstance } from '@/lib/firebase';
-import { Month, Envelope, Expense, Project } from '@/types/types';
+import { Month, Envelope, Expense, Project, Couchonne } from '@/types/types';
 import { ENVELOPE_CLASSES, EnvelopeClassId } from '@/lib/constants';
 
 // ===================== MONTHS =====================
@@ -352,4 +352,33 @@ export async function getManualInjection(uid: string): Promise<number> {
         return snap.data().manualInjection || 0;
     }
     return 0;
+}
+
+/**
+ * Sauvegarde ou met à jour une Couchonne (tirelire).
+ */
+export async function saveCouchonne(uid: string, couchonne: Omit<Couchonne, 'createdAt'>): Promise<void> {
+    const couchRef = doc(getDbInstance(), 'users', uid, 'couchonnes', couchonne.id);
+    await setDoc(couchRef, {
+        ...couchonne,
+        createdAt: serverTimestamp()
+    }, { merge: true });
+}
+
+/**
+ * Récupère toutes les Couchonnes de l'utilisateur.
+ */
+export async function getCouchonnes(uid: string): Promise<Couchonne[]> {
+    const couchRef = collection(getDbInstance(), 'users', uid, 'couchonnes');
+    const q = query(couchRef, orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Couchonne));
+}
+
+/**
+ * Supprime une Couchonne.
+ */
+export async function deleteCouchonne(uid: string, id: string): Promise<void> {
+    const couchRef = doc(getDbInstance(), 'users', uid, 'couchonnes', id);
+    await deleteDoc(couchRef);
 }

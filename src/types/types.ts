@@ -49,3 +49,11 @@ export interface Project {
     status: 'pending' | 'completed' | 'cancelled';
     note?: string;
 }
+
+export interface Couchonne {
+    id: string;
+    targetAmount: number;
+    denominations: number[]; // Tous les billets/pièces générés
+    checkedIndices: number[]; // Indices des ronds cochés
+    createdAt: Timestamp;
+}
