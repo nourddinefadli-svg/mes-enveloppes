@@ -33,10 +33,12 @@ export default function CouchonnePage() {
             const data = await getCouchonnes(user.uid);
             setCouchonnes(data);
             if (data.length > 0) {
-                // Keep current if still exists, otherwise pick first
+                // Only update the active one if we already had one selected (e.g., after an update)
+                // If it's the initial load (prev is null), we keep it null to show the overview list
                 setActiveCouch(prev => {
-                    const exists = data.find(c => c.id === prev?.id);
-                    return exists || data[0];
+                    if (!prev) return null;
+                    const exists = data.find(c => c.id === prev.id);
+                    return exists || null;
                 });
             } else {
                 setActiveCouch(null);
@@ -86,6 +88,7 @@ export default function CouchonnePage() {
             };
 
             await saveCouchonne(user.uid, newCouch);
+            setActiveCouch(newCouch as Couchonne);
             setIsCreating(false);
             loadData();
         } catch (error) {

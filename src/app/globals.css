@@ -314,7 +314,7 @@ body {
 /* ======= SUMMARY CARDS ======= */
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-md);
   margin-bottom: var(--space-xl);
 }
@@ -762,10 +762,6 @@ body {
     gap: var(--space-sm);
   }
 
-  .summary-card:last-child {
-    grid-column: span 2;
-  }
-
   .summary-card {
     padding: var(--space-md);
   }
@@ -1048,16 +1044,16 @@ body {
     position: sticky;
     top: 0;
     z-index: 100;
-    margin: -1rem -1rem 1.5rem -1rem; /* Adjust based on AppShell padding */
+    margin: -1rem -1rem 1.5rem -1rem;
+    /* Adjust based on AppShell padding */
     padding: 1rem;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border-glass);
   }
-  
-  .sticky-mobile-summary > .summary-grid {
+
+  .sticky-mobile-summary>.summary-grid {
     margin-bottom: 0 !important;
   }
 }
-
