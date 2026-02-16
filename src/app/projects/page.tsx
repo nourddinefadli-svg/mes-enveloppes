@@ -112,8 +112,7 @@ export default function ProjectsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        const confirmMsg = isRTL ? 'هل تريد حذف هذا المشروع؟' : 'Supprimer ce projet ?';
-        if (!user || !confirm(confirmMsg)) return;
+        if (!user || !confirm(t('projects.confirmDelete'))) return;
         try {
             await deleteProject(user.uid, id);
             loadProjects();
@@ -174,7 +173,7 @@ export default function ProjectsPage() {
                                 {totalBudget.toLocaleString('fr-FR')} {t('common.currency')}
                             </div>
                             <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                                {isRTL ? `ادخار (${realSavings}) + رصيد (${manualInjection})` : `Épargne (${realSavings}) + Apport (${manualInjection})`}
+                                {t('projects.budgetBreakdown').replace('{savings}', realSavings.toLocaleString('fr-FR')).replace('{injection}', manualInjection.toLocaleString('fr-FR'))}
                             </div>
                         </div>
                         <button
@@ -191,7 +190,7 @@ export default function ProjectsPage() {
             <div className="page-header" style={{ marginTop: '1rem' }}>
                 <div>
                     <h1 className="page-title">{t('projects.title')}</h1>
-                    <p className="page-subtitle">{isRTL ? 'نفقات مستقبلية واستثمارات' : 'Dépenses futures et investissements'}</p>
+                    <p className="page-subtitle">{t('projects.subtitle')}</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => handleOpenModal()}>
                     {t('projects.newProjectBtn')}
@@ -205,7 +204,7 @@ export default function ProjectsPage() {
             ) : sortedProjects.length === 0 ? (
                 <div className="empty-state">
                     <div className="empty-icon">🎯</div>
-                    <p className="empty-text">{isRTL ? 'لا توجد مشاريع حاليا. خطط لعملية الشراء القادمة !' : 'Aucun projet en vue. Planifiez votre prochain achat !'}</p>
+                    <p className="empty-text">{t('projects.noProjects')}</p>
                 </div>
             ) : (
                 <div className="summary-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
@@ -238,13 +237,13 @@ export default function ProjectsPage() {
 
                                 <div className="expense-actions" style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)', justifyContent: isRTL ? 'flex-start' : 'flex-end' }}>
                                     <button className="btn btn-secondary btn-sm" onClick={() => toggleStatus(p)}>
-                                        {p.status === 'completed' ? (isRTL ? 'فتح' : 'Réouvrir') : (isRTL ? 'إكمال' : 'Terminer')}
+                                        {p.status === 'completed' ? t('projects.reopen') : t('projects.complete')}
                                     </button>
                                     <button className="btn btn-secondary btn-sm" onClick={() => handleOpenModal(p)}>
                                         {t('common.edit')}
                                     </button>
                                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p.id)}>
-                                        {isRTL ? 'حذف' : 'Suppr.'}
+                                        {t('common.delete')}
                                     </button>
                                 </div>
                             </div>
@@ -262,7 +261,7 @@ export default function ProjectsPage() {
                         </div>
                         <form onSubmit={handleSave} className="auth-form">
                             <div className="form-group">
-                                <label className="form-label">{isRTL ? 'العنوان' : 'Titre'}</label>
+                                <label className="form-label">{t('projects.formTitle')}</label>
                                 <input className="form-input" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="..." required />
                             </div>
                             <div className="form-group">
@@ -311,7 +310,7 @@ export default function ProjectsPage() {
                                     placeholder="ex: 3000"
                                 />
                                 <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                                    {isRTL ? 'سيتم إضافة هذا المبلغ إلى مدخراتك المتراكمة بشكل دائم.' : 'Ce montant sera ajouté à votre épargne cumulée de manière permanente.'}
+                                    {t('projects.injectHelp')}
                                 </p>
                             </div>
                             <button className="btn btn-primary" onClick={handleInject} disabled={isSaving}>

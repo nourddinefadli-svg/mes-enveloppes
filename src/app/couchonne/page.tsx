@@ -52,7 +52,7 @@ export default function CouchonnePage() {
     const handleCreate = async () => {
         if (!user) return;
         const target = parseFloat(targetAmount);
-        const name = couchonneName.trim() || `${isRTL ? 'تحدي' : 'Défi'} ${couchonnes.length + 1}`;
+        const name = couchonneName.trim() || `${t('couchonne.defaultName')} ${couchonnes.length + 1}`;
         if (isNaN(target) || target <= 0) return;
         if (couchonnes.length >= 3) {
             alert(t('couchonne.maxChallenges'));
@@ -177,7 +177,7 @@ export default function CouchonnePage() {
                 <div className="loading-container"><div className="spinner" /></div>
             ) : isCreating ? (
                 <div className="glass-card" style={{ maxWidth: '500px', margin: '2rem auto', padding: '2rem' }}>
-                    <h2 style={{ marginBottom: '1.5rem' }}>{t('couchonne.startChallenge')}</h2>
+                    <h2 style={{ marginBottom: '1.5rem' }}>{t('couchonne.createTitle')}</h2>
                     <div className="form-group">
                         <label className="form-label">{t('couchonne.challengeName')}</label>
                         <input
@@ -189,7 +189,7 @@ export default function CouchonnePage() {
                         />
                     </div>
                     <div className="form-group">
-                        <label className="form-label">{t('couchonne.targetAmount')} ({t('common.currency')})</label>
+                        <label className="form-label">{t('couchonne.target')} ({t('common.currency')})</label>
                         <input
                             className="form-input"
                             type="number"

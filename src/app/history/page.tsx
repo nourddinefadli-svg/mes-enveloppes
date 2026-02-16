@@ -175,19 +175,19 @@ export default function HistoryPage() {
                     {expenses.map((exp) => {
                         const info = getEnvelopeInfo(exp.envelopeName);
                         return (
-                            <div key={exp.id} className="glass-card expense-item" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <div className="expense-info" style={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <div className="expense-category" style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: isRTL ? 'flex-start' : 'flex-start', gap: '8px' }}>
+                            <div key={exp.id} className="glass-card expense-item">
+                                <div className="expense-info">
+                                    <div className="expense-category">
                                         <span>{info.icon}</span> <span>{info.label}</span>
                                     </div>
                                     {exp.note && <div className="expense-note">{exp.note}</div>}
                                     <div className="expense-date">{formatDate(exp.date)}</div>
                                 </div>
-                                <div className="expense-amount" style={{ direction: 'ltr' }}>
+                                <div className="expense-amount">
                                     -{exp.amount.toLocaleString('fr-FR')} {t('common.currency')}
                                 </div>
                                 {isCurrentMonth && (
-                                    <div className="expense-actions" style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                    <div className="expense-actions">
                                         <button
                                             className="btn btn-secondary btn-icon"
                                             onClick={() => openEdit(exp)}
